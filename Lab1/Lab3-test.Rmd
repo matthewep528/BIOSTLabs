@@ -1,0 +1,507 @@
+---
+title: "M3 Lab"
+author: "Matthew Præstgaard"
+date: "due 10/23/2022"
+output:
+  rmdformats::downcute:
+    self_contained: true
+    default_style: "dark"
+    downcute_theme: "default"
+    code_folding: "show"
+  svglite:
+    fig.retina: 2
+---
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+
+require(knitr)
+knitr::opts_chunk$set(error = TRUE)
+
+```
+
+# Part 0: Loading and Cleanup
+
+## Housekeeping
+
+### Libraries
+
+```{r, message = FALSE}
+library(tidyverse)
+library(readxl)
+library(httpgd)
+library(ggthemr)
+ggthemr("flat dark")
+library(markdown)
+library(rmdformats)
+library(plotly)
+library(moments)
+library(gridExtra)
+library(ggh4x)
+
+```
+
+## Functions
+### I just think it's kind of fun to write them 
+
+```{r}
+
+#testing a histogram with summary stats included, my magnum opus function
+#x column must be passed as a string i.e. "column" until I become better at writing functions
+#usage: histogramCurveSum(data, "x", title = "title" (optional), x_title = "x_title" (optional))
+hist.summarycurve <- function(data, x, title = "Insert Title", x_title = "Insert x-Title") {
+  require(tidyverse)
+  require(ggthemr)
+  require(moments)
+  require(gridExtra)
+
+  ggthemr("flat dark")
+
+  # Calculate the summary statistics
+  mean_val <- mean(data[[x]])
+  sd_val <- sd(data[[x]])
+  median_val <- median(data[[x]])
+  iqr_val <- IQR(data[[x]])
+  skew_val <- moments::skewness(data[[x]])
+
+  # Create a summary table
+  summary_table <- data.frame(
+    Statistic = c("Mean", "SD", "Median", "IQR", "Skewness"),
+    Value = c(mean_val, sd_val, median_val, iqr_val, skew_val)
+  )
+
+  # Create the histogram plot
+  histogram_plot <- ggplot(data, aes_string(x = x)) +
+    geom_histogram(
+      aes(y = after_stat(density)),
+      bins = 50,
+      color = "#0052eb") +
+    stat_function(
+      fun = dnorm,
+      args = list(mean = mean_val, sd = sd_val),
+      size = 1,
+      linetype = "dashed",
+      col = "#ecd467"
+    ) +
+    labs(
+      title = title,
+      x = x_title
+    )
+
+  # Combine the histogram plot with the summary table
+  grid.arrange(histogram_plot, tableGrob(summary_table), ncol = 2, widths = c(3, 1))
+}
+
+#faceted histograms by grouping variable with density curves
+#usage: hist.dodge(data, data$x, data$group, "title")
+#must specify data$arg since [[x]] and {{x}} don't work for me most of the time
+hist.dodge <- function(data, x, group, title = "Insert Title") {
+
+  require(ggplot2)
+  require(ggh4x)
+
+  ggplot(data, aes(x = x, fill = group)) +
+    geom_histogram(aes(
+      y = after_stat(density)),
+      bins = 45,
+      alpha = 0.8,
+      color = "#353535") +
+    stat_theodensity(
+      col = "#ecd467",
+      size = 0.9,
+      linetype = "dashed"
+    ) +
+    labs(
+      title = title,
+      x = "Group",
+      y = "Frequency"
+    ) +
+    facet_wrap(group)
+
+}
+
+#function to summarize variables without retyping stuff
+#the function automatically drops NA values
+#usage: summarize_variable_drop(dataset, var)
+summarize.var <- function(dataset, var) {
+
+require(tidyverse)
+
+  dataset %>%
+    dplyr::summarise(
+      mean = mean({{ var }}, na.rm = TRUE),
+      median = median({{ var }}, na.rm = TRUE),
+      min = min({{ var }}, na.rm = TRUE),
+      max = max({{ var }}, na.rm = TRUE),
+      q25 = quantile({{ var }}, 0.25, na.rm = TRUE), # first quartile
+      q75 = quantile({{ var }}, 0.75, na.rm = TRUE), # third quartile
+      sd = sd({{ var }}, na.rm = TRUE),
+      n = length(na.omit({{ var }}))
+    ) %>%
+    mutate(IQR = q75 - q25)
+}
+
+#a simple qq test function. It probably doesn't actually save me any time, honestly.
+#usage: qqTest(data, sample, "title")
+qqTest <- function(data, sample, title = "title") {
+
+  require(tidyverse)
+
+  data %>%
+  ggplot(aes(sample = {{ sample }})) +
+  stat_qq() +
+  stat_qq_line(
+    col = "#ecd467",
+    size = 0.8) +
+    labs(
+      title = title,
+      x = "Theoretical Quantiles",
+      y = "Sample Quantiles"
+      )
+}
+
+# Function to summarize variables for multiple groups
+# Usage: summarize_group_var(dataset, group_var, var)
+summarize_group_var <- function(dataset, group_var, var) {
+  require(tidyverse)
+
+  dataset %>%
+    group_by({{ group_var }}) %>%
+    summarise(
+      mean = mean({{ var }}, na.rm = TRUE),
+      median = median({{ var }}, na.rm = TRUE),
+      min = min({{ var }}, na.rm = TRUE),
+      max = max({{ var }}, na.rm = TRUE),
+      q25 = quantile({{ var }}, 0.25, na.rm = TRUE), # first quartile
+      q75 = quantile({{ var }}, 0.75, na.rm = TRUE), # third quartile
+      sd = sd({{ var }}, na.rm = TRUE),
+      n = length(na.omit({{ var }}))
+    ) %>%
+    mutate(IQR = q75 - q25)
+}
+
+#faceted boxplot function with one box per group
+#usage: facBox1(data, x, y, fill, facet, title)
+facBox1 <- function(data, x, y, fill, title) {
+
+  require(tidyverse)
+
+  ggplot(data, aes(x = {{ x }}, y = {{ y }}, fill = {{ fill }})) +
+    geom_boxplot() +
+    labs(title = title)
+}
+
+```
+
+Plotly Functions
+
+```{r}
+
+# Test histogram function using Plotly
+# Example usage:
+# plot <- histogramCurvePlotly(data, data$x, "Title", "X-axis Label")
+# plot
+library(plotly)
+
+histogramCurvePlotly <- function(data, x, title, x_title) {
+    ggthemr("flat dark")
+
+  p <- plot_ly(data, x = ~x, type = "histogram", histnorm = "probability density", showlegend = FALSE, nbinsx = 40) %>%
+    layout(
+        title = title,
+        xaxis = list(title = x_title),
+        yaxis = list(title = "Density"),
+        font = list(color = "#ffffff"), # Set text color to white
+        paper_bgcolor = "#1e1e1e",      # Set background color
+        plot_bgcolor = "#1e1e1e"        # Set plot area color
+    )
+
+  mean_val <- mean(x)
+  sd_val <- sd(x)
+  
+  x_range <- seq(min(x), max(x), length.out = 100)
+  curve_vals <- dnorm(x_range, mean = mean_val, sd = sd_val)
+  
+  p <- add_lines(p, x = x_range, y = curve_vals, type = "scatter", mode = "lines", line = list(color = "#ecd467"))
+  
+  return(p)
+}
+
+
+#faceted boxplot written in plotly
+facBoxPlotly <- function(data, x, y, fill, title) {
+
+  require(ggthemr)
+  require(plotly)
+
+  ggthemr("flat dark")
+
+  p <- plot_ly(data, x = x, y = y, color = fill, type = "box") %>%
+    layout(
+        title = title,
+        font = list(color = "#ffffff"), # Set text color to white
+        paper_bgcolor = "#1e1e1e",      # Set background color
+        plot_bgcolor = "#1e1e1e"        # Set plot area color
+    )
+
+  return(p)
+}
+
+
+hist.dodge.plotly <- function(data, x, group, title = "Insert Title") {
+  require(ggplot2)
+  require(ggh4x)
+
+  gg <- ggplot(data, aes(x = x, fill = group)) +
+    geom_histogram(aes(y = after_stat(density)),
+                   bins = 45,
+                   alpha = 0.8,
+                   color = "#353535") +
+    stat_theodensity(col = "#ecd467",
+                     size = 0.9,
+                     linetype = "dashed") +
+    labs(title = title, x = "Group", y = "Frequency") +
+    facet_wrap(group) +
+    theme(
+      plot.background = element_rect(fill = "#1e1e1e"),
+      panel.background = element_rect(fill = "#1e1e1e"),
+      axis.text = element_text(color = "#ffffff"),
+      axis.title = element_text(color = "#ffffff"),
+      strip.text = element_text(color = "#ffffff"),
+      strip.background = element_rect(fill = "#1e1e1e")
+    )
+
+  ggplotly(gg, tooltip = "text") %>%
+    layout(
+      font = list(color = "#ffffff"),  # Set text color to white
+      paper_bgcolor = "#1e1e1e",      # Set background color
+      plot_bgcolor = "#1e1e1e"        # Set plot area background color
+    )
+}
+
+
+#regular boxplot written in plotly
+PlotlyBox <- function(data, y, title) {
+
+  require(ggthemr)
+  require(plotly)
+
+  ggthemr("flat dark")
+
+  p <- plot_ly(data, y = y, type = "box") %>%
+    layout(
+        title = title,
+        font = list(color = "#ffffff"), # Set text color to white
+        paper_bgcolor = "#1e1e1e",      # Set background color
+        plot_bgcolor = "#1e1e1e"        # Set plot area color
+    )
+
+  return(p)
+}
+
+```
+
+## Load and Cleaup Data
+
+```{r}
+
+library(knitr)
+library(dplyr)
+
+load("acupuncture_data_reduced.RData")
+acupuncture <- data #creating table with more descriptive name while leaving original untouched
+
+#creating variable for change in headache severity between baseline and 3-month follow-up (pk2 - pk1)
+#changing certain columns to factors
+acupuncture <- acupuncture %>% #making data set with more descriptive label
+    dplyr::mutate(Severity_Change = (pk2 - pk1)) %>%
+    dplyr::mutate(group_f = factor(group, levels = c(0, 1), labels = c("control", "treatment"))) %>%
+    dplyr::mutate(across(c(id, sex, migraine, acupuncturist, practice_id, group), as.factor))
+
+knitr::kable(head(acupuncture), caption = "Table 1. Select Observations From the Dataset")
+
+```
+
+# Part 1: One-Sample
+
+## Descriptives
+
+### Summary Statistics
+
+```{r}
+
+#creating specific data frames for change in severity
+changeSummary <- summarize.var(acupuncture, Severity_Change)
+kable(changeSummary, caption = "Table 2. Summary Statistics of Severity Change (n excludes NAs)")
+sevChange <- acupuncture %>%
+  select(pk1, pk2, Severity_Change, group_f) %>%
+  mutate(n_pk1 = c(length(na.omit(pk1)))) %>%
+  mutate(n_pk2 = c(length(na.omit(pk2))))
+sevChangeNA <- sevChange %>% na.omit #creating frame without NAs
+
+```
+
+## Plots
+
+```{r, dpi = 150, warning = FALSE}
+
+hist.summarycurve(sevChangeNA, "Severity_Change", "Fig 1. Histogram of Change in Headache Severity", "Change (combined groups)")
+
+qqTest(sevChangeNA, Severity_Change, "Fig 2. QQ-plot of Average Medicare Payments")
+
+#sevChangeNA %>% 
+#  ggplot(aes(y = Severity_Change)) +
+#  geom_boxplot() +
+#  labs(
+#    title = "Fig 2. Boxplot of Severity Change",
+#    y = "Change"
+#  )
+
+```
+
+The distribution appears normally distributed with a **mean of -4.7, median of -4,**
+**standard deviation of 11.7, and IQR of 10.4.** The data are slightly skewed with a **skewness of -0.17.**
+
+## Paired t test
+
+```{r}
+
+ttest1 <- t.test(acupuncture$pk2, acupuncture$pk1, paired = TRUE, conf.level = 0.99) %>%
+  broom::glance()
+kable(ttest1, caption = "Table 3. Two-Sided Paired T-Test of Change in Headache Severity. NAs excluded. N pk1 = 401. N pk2 = 326")
+
+```
+
+A paired test was used as we are
+comparing headache severity in the same group of people before and after treatment/control.
+
+The null hypothesis was that the change in headache severity would be 0, with the alternative
+being that the change would not be 0.
+
+The test resulted in a **T = -7.2599** and **p = 2.877e-12.** 
+The two-sided confidence interval is **(-6.3974, -3.0321).**
+
+With the low p-value and lack of 0 appearing in the 99% confidence interval, we reject the null
+hypothesis null hypothesis and conclude that there is a significant difference in the severity
+of headaches over the three months to follow-up in the combined control and treatment groups.
+
+## Signed rank test
+
+```{r}
+
+wilcox1 <- wilcox.test(acupuncture$pk2, acupuncture$pk1, conf.level = 0.99, conf.int = TRUE) %>%
+  broom::glance()
+kable(wilcox1, caption = "Table 4. Wilcoxon Signed-Rank Test of Change in Headache Severity")
+
+```
+
+A Wilcoxon Signed-Rank Test comparing the medians of headache severity from baseline to
+the three month followup yielded **p = 1e-07.** 
+We meet the conditions for the test as the this is a random sample and the distributions are **symmetrical.**
+
+The null hypothesis is that the medians are the same; the alternative is that the medians
+are not the same.
+
+With the calculated p-value, we **reject the null hypothesis** that the medians are the same. There is sufficient
+evidence that there is a significant difference in the severity of headaches between the first measurement at at the 
+three month followup.
+
+## Summary of part 1 
+
+Based on the findings, we are able to conclude that there was a statistically significant chage in the severity of headaches between initial
+report and followup, with a mean change of -4.7. While the p value changed depending on the test, both parametric and nonparametric tests
+yielded a p value below our alpha of 0.01.
+
+# Part 2: Two Sample
+
+## Descriptives
+
+### Summary Statistics
+
+```{r}
+
+changeSummaryGroup <- summarize_group_var(acupuncture, group_f, Severity_Change)
+kable(changeSummaryGroup, caption = "Table 5. Summary Statistics of Headache Severity Change by Group")
+
+```
+
+The data for both groups appear symetric. The distribution of the treatment group contains a higher maximum and lower minimum.
+
+## Plots
+
+```{r, dpi = 150}
+
+facBox1(sevChangeNA, Severity_Change, group_f, group_f, "Fig 3. Boxplots of Change in Severity by Group")
+
+hist.dodge(sevChangeNA, sevChangeNA$Severity_Change, sevChangeNA$group_f, "Fix 4. Histograms of Change in Severity by Group")
+
+```
+
+## Two-sample t test
+
+```{r}
+
+ttest2 <- t.test(Severity_Change ~ group_f, data = sevChangeNA, var.equal = FALSE) %>%
+  broom::glance()
+kable(ttest2, caption = "Table 6. Two-Sided Two-Sample T-Test Comparing Change in Headache Severity by Treatment Group")
+
+```
+
+A two-sample t test was performed without assuming equal variance. The null hypothesis was that there would not be
+a difference in mean headache severity change between treatment and control groups, and the alternative was that there
+would be a difference. We meet the conditions for this test as we have random samples, two independent groups, and a sufficiently large n.
+This yielded **T = 2.9006 and p = 0.004.** The 95% confidence interval is **(1.1923, 6.2185).**
+
+Based on the test, we **reject the null hypothesis** that the difference in mean severity change = 0 and **fail to reject the alternative**
+that they are not equal. We conclude that there is evidence that the treatment resulted in a change different from the placebo.
+
+## Wilcoxon rank sum test
+
+
+```{r}
+
+wilcox2 <- wilcox.test(Severity_Change ~ group_f, data = sevChangeNA) %>%
+  broom::glance()
+kable(wilcox2, caption = "Table 7. Wilcoxon Rank Sum Test of Change in Headache Severity by Treatment Group")
+
+```
+
+A Wilcoxon rank sum test comparing the median change in headache severity between the two groups yielded **p = 0.0012.**
+The conditions for the test were met as we used random samples and two independent groups with similar distributions.
+From the results of the test, we **reject the null hypothesis** that the medians are equal and **fail to reject the alternative**
+that they are not equal. We conclude that the treatment resulted in a difference in change in headache severity compared to the placebo.
+
+## Summary of part 2
+
+Based on our findings, we can conclude that there is likely a difference in change in headache severity by the followup date between the treatment group
+and the control group. While the nonparametric test yielded a higher p value than the parametric test, both tests were within alpha = 0.05.
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
+
+# Plotly Graphs that I was having "fun" making.
+
+```{r}
+
+HistChangeCombined.Plotly <- histogramCurvePlotly(sevChangeNA, sevChangeNA$Severity_Change, "Fig 1. Histogram of Change in Severity (combined groups)", "X-axis Label")
+HistChangeCombined.Plotly
+
+qqCombined.Plotly <- qqTest(sevChangeNA, Severity_Change, "Fig 2. QQ-plot of Average Medicare Payments")
+ggplotly(qqCombined.Plotly)
+
+BoxCombined.Plotly <- PlotlyBox(sevChangeNA, sevChangeNA$Severity_Change, "Fig 3. Boxplot of Severity Change")
+BoxCombined.Plotly
+
+######
+
+BoxGroups.Plotly <- facBoxPlotly(sevChangeNA, sevChangeNA$Severity_Change, sevChangeNA$group_f, sevChangeNA$group_f, "Fig 4. Boxplots of Change in Severity by Group")
+BoxGroups.Plotly
+
+HistGroups.Plotly <- hist.dodge.plotly(sevChangeNA, sevChangeNA$Severity_Change, sevChangeNA$group_f, "Fig 5. Histograms of Change in Headache Severity by Group")
+ggplotly(HistGroups.Plotly)
+
+
+
+```

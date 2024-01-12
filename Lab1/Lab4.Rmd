@@ -1,0 +1,412 @@
+---
+title: "M4 Lab"
+author: "Matthew Præstgaard"
+date: "due 11/12/2023"
+output:
+  rmdformats::downcute:
+    self_contained: true
+    default_style: "dark"
+    downcute_theme: "default"
+    code_folding: "show"
+  svglite:
+    fig.retina: 2
+---
+
+```{r,echo = FALSE, message = FALSE, warning = FALSE}
+require(knitr)
+knitr::opts_chunk$set(error = TRUE)
+```
+
+```{r, message = FALSE}
+
+library(tidyverse)
+library(car)
+library(emmeans)
+library(ggthemr)
+    ggthemr("flat dark")
+library(markdown)
+library(rmdformats)
+library(plotly)
+library(moments)
+library(gridExtra)
+library(ggh4x)
+library(jtools)
+#library(kableExtra)
+
+```
+
+Functions
+
+```{r}
+
+# Function to summarize variables with optional grouping
+# Usage: summarize.var(dataset, var, group_var (optional))
+summarize.var <- function(dataset, var, group_var = NULL) {
+  require(tidyverse)
+
+  result <- dataset %>%
+    {if (!is.null(group_var)) group_by({{ group_var }}) else .} %>%
+    summarise(
+      mean = mean({{ var }}, na.rm = TRUE),
+      median = median({{ var }}, na.rm = TRUE),
+      min = min({{ var }}, na.rm = TRUE),
+      max = max({{ var }}, na.rm = TRUE),
+      q25 = quantile({{ var }}, 0.25, na.rm = TRUE), # first quartile
+      q75 = quantile({{ var }}, 0.75, na.rm = TRUE), # third quartile
+      sd = sd({{ var }}, na.rm = TRUE),
+      n = length(na.omit({{ var }}))
+    ) %>%
+    mutate(IQR = q75 - q25)
+
+  return(result)
+}
+
+
+# Faceted boxplot function with one box per group
+# Usage: ggBoxplots(data, x, fill, title)
+# Example usage:
+# ggBoxplots(your_data_frame, x_column_name, fill_column_name, "Your Title")
+ggBoxplots <- function(data, x, fill, title = "title") {
+  require(tidyverse)
+
+  ggplot(data, aes(x = {{ x }}, y = "", fill = {{ fill }})) +
+    geom_boxplot() +
+    labs(title = title) +
+    facet_wrap(as.formula(paste0("~", as.name(deparse(substitute(fill))))), scales = "free")
+}
+
+
+# ggplot histogram function with optional faceting variable
+# Usage: gg.hist(data, data$x, bins (optional), title (optional), group (optional))
+gg.hist <- function(data, x, bins = 20, title = "Insert Title", x_lab = "x", group = NULL) {
+  require(ggplot2)
+  require(ggh4x)
+
+  gg <- ggplot(data, aes(x = {{ x }})) +
+    geom_histogram(aes(
+        y = after_stat(density)),
+      bins = bins,
+      alpha = 0.8,
+      color = "#353535"
+    ) +
+    stat_theodensity(
+      col = "#ecd467",
+      size = 0.9,
+      linetype = "dashed"
+    ) +
+    labs(
+      title = title,
+      x = x_lab,
+      y = "Frequency"
+    )
+
+  if (!is.null(group)) {
+    gg <- gg + aes(fill = {{ group }}) +
+      facet_wrap({{ group }})
+  }
+
+  return(gg)
+}
+
+
+
+qqTest <- function(data, sample, title = "title", facet_var = NULL) {
+    require(tidyverse)
+
+    gg <- ggplot(data,
+        aes(sample = {{ sample }})) +
+        stat_qq() +
+        stat_qq_line(
+            size = 0.8,
+        ) +
+        labs(
+            title = title,
+            x = "Theoretical Quantiles",
+            y = "Sample Quantiles"
+        ) +
+        guides(color = "none")
+
+    if (!is.null(facet_var)) {
+
+        # Extract colors from facet_var variable
+        colors <- pull(data, {{ facet_var }})
+
+        gg <- gg + aes(color = factor(colors)) + facet_wrap(as.formula(paste("~", facet_var)))
+    }
+
+    return(gg)
+}
+
+
+
+#density plots with optional grouping variable
+#can be faceted or together by specifying either group or color
+#usage: gg.density(data, sample, group = "group" (optional), color = "NULL" (optional), title = "title" (optional) )
+gg.density <- function(data, sample, group = NULL, color = NULL, title = "Insert Title") {
+
+  require(ggplot2)
+
+  plot <- ggplot(data, aes(x = {{ sample }})) +
+    geom_density() +
+    labs(
+      title = title,
+      y = "Frequency"
+    )
+
+  if (!is.null(group)) {
+
+    colors <- pull(data, {{ group }})
+
+    plot <- plot + aes(color = factor(colors)) +
+      facet_wrap(as.formula(paste("~", group))) +
+      labs(color = "Group")
+  }
+
+  if (!is.null(color)) {
+
+    colors <- pull(data, {{ color }})
+
+    plot <- plot + aes(fill = factor(colors), color = factor(colors), alpha = 0.02) +
+      labs(fill = "Group") +
+      geom_density(size = 1) +
+      guides(color = "none", alpha = "none")
+  }
+
+  return(plot)
+}
+
+#ggplotRegression
+#use to plot linear model with summary statistics and error
+#Usage: ggplotRegression(data)
+ggplotRegression <- function(fit, title = "title") {
+
+require(ggplot2)
+
+ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) + 
+  geom_point() +
+  stat_smooth(
+    method = "lm",
+    geom = "smooth") +
+  labs(
+    title = title,
+    subtitle = paste("Adj R2 = ", signif(summary(fit)$adj.r.squared, 5), 
+                    "Intercept =", signif(fit$coef[[1]], 5 ), 
+                    " Slope =", signif(fit$coef[[2]], 5), 
+                    " P =", signif(summary(fit)$coef[2,4], 5)))
+}
+
+```
+
+# Part 1: Tumor Growth
+
+## Data Management
+
+### Load Data
+
+```{r}
+
+# load workspace depending on which OS being used
+sysname <- Sys.info()["sysname"]
+
+if(sysname == "Linux") {
+  load("/home/matthew/rclone-gdrive/Grad School/Fall23/BIOST_2241_Intro/M4/Lab4/tumor_growth.RData")
+} else if(sysname == "Windows") {
+  load("X:/My Drive/Grad School/Fall23/BIOST_2241_Intro/M4/Lab4/tumor_growth.RData")
+}
+
+```
+
+```{r}
+
+# add factor variable for treatment labels
+tumordat <- tumor %>%
+    dplyr::mutate(
+        Group_f = factor(Group, levels = c(1, 2, 3, 4),
+        labels = c("control", "drug_only", "radiation_only", "drug_radiation")))
+kable(head(tumordat), caption = "Table 1. Select Data")
+
+```
+
+## Descriptive Statistics
+
+```{r}
+
+# numerical summary by group
+sum1 <- summarize.var(tumordat, Group_f, Size)
+kable(head(sum1), caption = "Table 2. Summary Statistics")
+
+#making table with just group and size variables
+group_size <- tumordat %>%
+    dplyr::select(Size, Group_f) %>%
+    data.frame()
+
+```
+
+## Plots
+
+```{r, warning = FALSE}
+# plots
+gg.hist(group_size, Size, title = "Fig 1. Histograms of Size by Group", group = group_size$Group_f) %>%
+  ggplotly()
+
+gg.density(group_size, Size, color = "Group_f", title = "Fig 2. Density Plots of Size by Group") %>%
+  ggplotly()
+
+#hist1 + labs(subtitle = "means (clockwise from top left) = 2067.29, 1787.75, 1890.32, 1130.64")
+
+
+```
+
+The data do not appear to deviate too far from a normal distribution, although the sample size per treatment group is very small.
+
+## ANOVA
+
+As the sample sizes are quite small, qq-plots were created to assess normality. The data appear to
+follow the theoretical quantiles somewhat, but the test still should not be taken as
+conclusive as it would be if N were larger.
+
+```{r}
+
+# Check conditions
+
+# sample sizes table
+sum1 %>% dplyr::select(Group_f, n) %>% kable(Caption = "Table 3. Sample Sizes of Groups")
+
+```
+
+
+```{r, include = FALSE}
+
+# qqplots for each group if sample sizes are small
+qq1 <- qqTest(group_size, Size, "Fig 3. QQ-plots of Size by Group", "Group_f")
+
+```
+
+```{r}
+
+ggplotly(qq1)
+
+```
+
+
+```{r}
+# run anova model
+
+# estimate group means with lm formula
+model <- lm(Size ~ Group_f, data = tumordat)
+
+# display ANOVA output
+Anova(model)
+
+# multiple-testing correction
+bonf.model <- emmeans(model, pairwise ~ "Group_f", adjust = "bonferroni")
+
+# show each pairwise comparison
+knitr::kable(bonf.model$contrasts)
+
+```
+
+For the ANOVA test, the **null hypothesis** was that none of means differed. The **alternative hypothesis** was that there was
+at least one mean that differed from the rest of the groups.
+The p-value from the initial ANOVA test was **0.003.** Pairwise comparison tests showed the largest difference in to be 
+between the control and combined radiation-drug therapy groups (p = 0.0038).
+We can conclude from this that the most effective treatment is likely a combination drug and radiation therapy.
+
+
+
+## Kruskal-Wallis
+
+
+```{r}
+# check conditions
+
+# run test
+kruskalModel <- kruskal.test(Size ~ Group_f, data = tumordat)
+kruskalModel
+
+```
+
+The hypothesis for this test were that none of the group medians would differ **(null)** and that at least one of the medians would differ **(alternative).**
+We assume that we have random samples in this and that they are independent. Looking at the qq-tests shows them to be similar in distribution.
+With **p = 0.023** we can conclude from the test that at least one of the group medians is different from the rest. This is in line with the results from the ANOVA test.
+
+
+
+# Part 2: Intubation
+
+## Data Management 
+
+
+```{r}
+# load in data and filter
+sysname <- Sys.info()["sysname"]
+
+if(sysname == "Linux") {
+  load("/home/matthew/rclone-gdrive/Grad School/Fall23/BIOST_2241_Intro/M4/Lab4/Laryngoscope.Rdata")
+} else if(sysname == "Windows") {
+  load("X:/My Drive/Grad School/Fall23/BIOST_2241_Intro/M4/Lab4/Laryngoscope.Rdata")
+}
+# keep only successful first intubation attempts, BMI, and Ease
+laryClean <- laryngoscope %>%
+  select(attempt1_S_F, BMI, ease) %>%
+  filter(attempt1_S_F == 1)
+
+```
+
+## Descriptive Statistics
+
+```{r}
+
+# numerical summary
+larySum <- summarize.var(laryClean, BMI)
+knitr::kable(larySum)
+
+# plots
+gg.hist(laryClean, BMI, title = "Fig 4. Histogram of BMI") %>%
+  ggplotly()
+
+gg.hist(laryClean, ease, title = "Fig 5. Histogram of Ease of Intubation") %>%
+  ggplotly()
+
+qqBMI <- qqTest(laryClean, BMI, title = "Fig 6a. QQ-plot of BMI")
+qqEase <- qqTest(laryClean, ease, title = "Fig 6b. QQ-plot of Ease of Intubation")
+qqlary <- grid.arrange(qqBMI, qqEase)
+
+```
+
+The distribution of ease of intubation seems vaguely bimodal, while the distribution of BMI appears normal with a slight right skew.
+The qq-tests for each suggest that they are fairly normally distributed.
+
+## Linear Regression  
+
+```{r}
+# fit the model
+fit <- lm(ease ~ BMI, data = laryClean)
+
+ggplotRegression(fit, title = "Fig 6. Regression Plot of Ease of Intubation vs BMI") %>%
+  ggplotly()
+
+# estimated coefficients, t-tests, and global F-test
+#summary(fit)
+summ(fit) #this may not be visible in dark mode
+
+#confidence interval
+confint(fit)
+
+# predict the value for BMI = 35
+
+```
+
+
+The equation for the linear model of ease of intubation vs BMI is **y = -0.53047x + 62.781.**
+This means that for every 1 point increase in BMI, the ease of intubation is expected to decrease by aprox. 0.53.
+With an adjusted R2 of ~0, it can be said that none of the variance in ease of intubation is attributable to BMI.
+The p-value for the slope is **0.37,** indicating that we have no evidence that BMI has a linear relationship with ease of intubation.
+
+
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
