@@ -60,6 +60,9 @@ ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) 
 
 ```{r}
 
+#plotlyRegression: Scatterplot with line, SE, and summary statistics
+#requires a model to have been created beforehand
+#Usage: plotlyRegression(fit, title = "title" (optional))
 plotlyRegression <- function(fit, title = "title") {
 
   require(plotly)
@@ -70,15 +73,25 @@ plotlyRegression <- function(fit, title = "title") {
   y_var <- names(df)[1]
 
   # Create a scatter plot
-  p <- plot_ly(df, x = ~get(x_var), y = ~get(y_var), type = 'scatter', mode = 'markers')
+  p <- plot_ly(df, x = ~df[[x_var]], y = ~df[[y_var]], type = 'scatter', mode = 'markers')
 
-  # Add linear regression line
+  # Get confidence interval data
+  confint_df <- data.frame(predict(fit, interval = "confidence"))
+  confint_df[[x_var]] <- df[[x_var]] # Adding the x variable to the dataframe
+
+  # Add linear regression line and 95% confidence interval
   p <- p %>%
     add_lines(
-      data = df,
-      x = ~get(x_var), 
-      y = ~fitted(lm(get(y_var) ~ get(x_var), data = df)),
-      line = list(color = 'blue')
+      x = confint_df[[x_var]], 
+      y = confint_df$fit, 
+      line = list(color = '#0aca8d')
+    ) %>%
+    add_ribbons(
+      x = confint_df[[x_var]], 
+      ymin = confint_df$lwr,
+      ymax = confint_df$upr,
+      line = list(color = 'transparent'),
+      fillcolor = 'rgba(0, 100, 255, 0.2)'
     )
 
   # Create subtitle with summary statistics

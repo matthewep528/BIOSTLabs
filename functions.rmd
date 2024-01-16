@@ -1,0 +1,342 @@
+---
+title: "Some Functions"
+author: "Matthew Præstgaard"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    number_sections: false
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+
+require(knitr)
+knitr::opts_chunk$set(error = T)
+
+```
+
+```{r}
+
+library(tidyverse)
+library(readxl)
+library(httpgd) #package for viewing plots as SVGs in an internal server while working
+library(pryr)
+library(ggthemr)
+ggthemr("flat dark")
+library(rlang)
+
+```
+
+Summarize Variable Dropping NAs
+
+```{r}
+
+#function to summarize variables without retyping stuff
+#the function automatically drops NA values
+#usage: summarize_variable_drop(dataset, var)
+summarize_variable_drop <- function(dataset, var) {
+
+require(tidyverse)
+
+  dataset %>%
+    dplyr::summarise(
+      mean = mean({{ var }}, na.rm = TRUE),
+      median = median({{ var }}, na.rm = TRUE),
+      min = min({{ var }}, na.rm = TRUE),
+      max = max({{ var }}, na.rm = TRUE), 
+      q25 = quantile({{ var }}, 0.25, na.rm = TRUE), # first quartile
+      q75 = quantile({{ var }}, 0.75, na.rm = TRUE), # third quartile
+      sd = sd({{ var }}, na.rm = TRUE)
+    ) %>%
+    mutate(IQR = q75 - q25)
+}
+
+```
+
+Regression Functions (showing R-squared or correlation)
+
+```{r}
+
+#ggplotRegressionRsq
+#use to plot linear model with summary statistics and error
+#shows R-squared
+#Usage: ggplotRegressionRsq(data, title = "title")
+#be sure to create a fit first to pass to it i.e. fit <- lm(y ~ x, data = data)
+ggplotRegressionRsq <- function (fit, title) {
+
+require(ggplot2)
+
+ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "#2552cf") +
+  labs(title = title, subtitle = paste("Adj R2 = ", signif(summary(fit)$adj.r.squared, 5), 
+                    "Intercept =", signif(fit$coef[[1]], 5 ), 
+                    " Slope =", signif(fit$coef[[2]], 5), 
+                    " P =", signif(summary(fit)$coef[2,4], 5)))
+}
+
+
+#ggplotRegressionCor
+#use to plot linear model with summary statistics and error
+#shows correlation
+#Usage: ggplotRegressionCor(data, title = "title")
+#be sure to create a fit first to pass to it i.e. fit <- lm(y ~ x, data = data)
+ggplotRegressionCor <- function(fit, title) {
+  require(ggplot2)
+
+  corr <- cor(fit$model[[2]], fit$model[[1]], use = "pairwise.complete.obs")
+
+  ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) + 
+    geom_point() +
+    stat_smooth(method = "lm", col = "#2552cf") +
+    labs(
+      title = title,
+      subtitle = paste("Correlation =", signif(corr, 3),
+                        "Intercept =", signif(fit$coef[[1]], 5),
+                        "Slope =", signif(fit$coef[[2]], 5),
+                        "P =", signif(summary(fit)$coef[2,4], 5)))
+}
+
+```
+
+Faceted Boxplot
+
+```{r}
+
+#faceted boxplot function with one box per group
+#usage: facBox1(data, x, y, fill, facet, title)
+facBox1 <- function(data, x, y, fill, title) {
+
+  require(tidyverse)
+
+  ggplot(data, aes(x = x, y = y, fill = fill)) +
+    geom_boxplot() +
+    labs(title = title)
+}
+
+```
+
+Histograms (side-by-side, simple, and with a normal curve)
+
+```{r}
+
+#faceted histograms by grouping variable with density curves
+#usage: hist.dodge(data, data$x, data$group, "title", "y_title")
+hist.dodge <- function(data, x, group, title = "Insert Title") {
+
+  require(ggplot2)
+  require(ggh4x)
+
+  ggplot(data, aes(x = x, fill = group)) +
+    geom_histogram(aes(
+      y = after_stat(density)),
+      bins = 45,
+      alpha = 0.8,
+      color = "#353535") +
+    stat_theodensity(
+      col = "#ecd467",
+      size = 0.9,
+      linetype = "dashed"
+    ) +
+    labs(
+      title = title,
+      x = "Group",
+      y = "Frequency"
+    ) +
+    facet_wrap(group)
+
+}
+
+```
+
+```{r}
+
+#a second test histogram function, this time with a curve line
+#usage: histogramtest2(data, data$x, "title", "x_title")
+  histogramCurve <- function(data, x, title, x_title) {
+
+    require(tidyverse)
+
+    data %>%
+      ggplot(aes(x = x)) +
+      geom_histogram(aes(y = ..density..)) +
+      stat_function(
+        fun = dnorm,
+        args = list(mean = mean(x), sd = sd(x)),
+        size = 1,
+        linetype = "dashed",
+        col = "#ecd467"
+      ) +
+      labs(
+        title = title,
+        x = x_title)
+  }
+
+```
+
+QQ-test
+
+```{r}
+
+#a simple qq test function. It probably doesn't actually save me any time, honestly.
+#usage: qqTest(data, sample, "title")
+qqTest <- function(data, sample, title) {
+
+  require(tidyverse)
+
+  data %>%
+  ggplot(aes(sample = {{ sample }})) +
+  stat_qq() +
+  stat_qq_line(
+    col = "#ecd467",
+    size = 0.8) +
+    labs(
+      title = title,
+      x = "Theoretical Quantiles",
+      y = "Sample Quantiles"
+      )
+}
+
+```
+
+```{r}
+
+#testing a histogram with summary stats included
+#x column must be passed as a string i.e. "column" until I become better at writing functions
+#usage: histogramCurveSum(data, "x", title = "title" (optional), x_title = "x_title" (optional))
+hist.summarycurve <- function(data, x, title, x_title) {
+  require(tidyverse)
+  require(ggthemr)
+  require(moments)
+  require(gridExtra)
+
+  ggthemr("flat dark")
+
+  # Calculate the summary statistics
+  mean_val <- mean(data[[x]])
+  sd_val <- sd(data[[x]])
+  median_val <- median(data[[x]])
+  iqr_val <- IQR(data[[x]])
+  skew_val <- skewness(data[[x]])
+
+  # Create a summary table
+  summary_table <- data.frame(
+    Statistic = c("Mean", "SD", "Median", "IQR", "Skewness"),
+    Value = c(mean_val, sd_val, median_val, iqr_val, skew_val)
+  )
+
+  # Create the histogram plot
+  histogram_plot <- ggplot(data, aes_string(x = x)) +
+    geom_histogram(
+      aes(y = after_stat(density)),
+      bins = 50,
+      color = "#0052eb") +
+    stat_function(
+      fun = dnorm,
+      args = list(mean = mean_val, sd = sd_val),
+      size = 1,
+      linetype = "dashed",
+      col = "#ecd467"
+    ) +
+    labs(
+      title = title,
+      x = x_title
+    )
+
+  # Combine the histogram plot with the summary table
+  grid.arrange(histogram_plot, tableGrob(summary_table), ncol = 2, widths = c(3, 1))
+}
+
+
+```
+
+```{r}
+
+
+
+```
+
+```{r}
+
+# Test histogram function using Plotly
+# Example usage:
+# plot <- histogramCurvePlotly(data, data$x, "Title", "X-axis Label")
+# plot
+
+library(plotly)
+
+histogramCurvePlotly <- function(data, x, title, x_title) {
+    ggthemr("flat dark")
+
+  p <- plot_ly(data, x = ~x, type = "histogram", histnorm = "probability density", showlegend = FALSE) %>%
+    layout(
+        title = title,
+        xaxis = list(title = x_title),
+        yaxis = list(title = "Density"),
+        font = list(color = "#ffffff"), # Set text color to white
+        paper_bgcolor = "#1e1e1e",      # Set background color
+        plot_bgcolor = "#1e1e1e"        # Set plot area color
+    )
+
+  mean_val <- mean(x)
+  sd_val <- sd(x)
+
+  x_range <- seq(min(x), max(x), length.out = 100)
+  curve_vals <- dnorm(x_range, mean = mean_val, sd = sd_val)
+
+  p <- add_lines(p, x = x_range, y = curve_vals, type = "scatter", mode = "lines", line = list(color = "#ecd467"))
+
+  return(p)
+}
+
+```
+
+```{r}
+
+#faceted histograms by grouping variable with density curves
+#usage: hist.dodge(data, data$x, data$group, "title", "y_title")
+hist.sumgroup <- function(data, x, group, title = "Insert Title") {
+
+  require(ggplot2)
+  require(ggh4x)
+  require(ggpubr)
+
+  # Calculate summary statistics
+  summary_stats <- data %>%
+    group_by({{group}}) %>%
+    summarize(
+      mean_val = mean({{x}}, na.rm = TRUE),
+      median_val = median({{x}}, na.rm = TRUE),
+      iqr_val = IQR({{x}}, na.rm = TRUE)
+    )
+
+  #create plot
+  p <- ggplot(data, aes(x = x, fill = group)) +
+    geom_histogram(aes(
+      y = after_stat(density)),
+      bins = 45,
+      alpha = 0.8,
+      color = "#353535") +
+    stat_theodensity(
+      col = "#ecd467",
+      size = 0.9,
+      linetype = "dashed"
+    ) +
+    labs(
+      title = title,
+      x = "Group",
+      y = "Frequency"
+    ) +
+    facet_wrap(group) +
+    annotate("text", x = Inf, y = -Inf,
+          label = paste("Mean = ", round(summary_stats$mean_val, 2),
+                        "\nMedian = ", round(summary_stats$median_val, 2),
+                        "\nIQR = ", round(summary_stats$iqr_val, 2)),
+          hjust = 1, vjust = -1, size = 4, fontface = "bold")
+
+  return(p)
+}
+
+```
