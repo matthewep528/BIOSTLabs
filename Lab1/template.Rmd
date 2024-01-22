@@ -1,8 +1,7 @@
 ---
 title: "M1 Lab"
-author: "Matthew Præstgaard"
-date: "due 01/31/2024"
-runtime: shiny
+author: "YOUR NAME HERE"
+date: "Spring 2024"
 output:
   html_document:
     df_print: paged
@@ -12,200 +11,55 @@ output:
 ---
 
 ```{r,echo=FALSE,message=FALSE,warning=FALSE}
-
 require(knitr)
-knitr::opts_chunk$set(error = TRUE)
-
+# this line of code is added so that the file can be knitted even when error messages are produced by your code
+knitr::opts_chunk$set(error = T)
 ```
 
 ```{r, message=FALSE}
-
+# load libraries (you may need to install these if you never have before)
 library(tidyverse)
 library(readxl)
 library(car)
-library(plotly)
-library(ggthemr)
-  ggthemr("flat dark")
-library(gridExtra)
-library(ggh4x)
-library(jtools)
-library(shiny)
-
 ```
 
-# Housekeeping
-## Functions
+
+# Data Management
 
 ```{r}
+# read in data using read_xlsx() function 
+# (don't forget to save it as an object with a name)
 
-#use to plot linear model with summary statistics and error
-#Usage: ggRegression(data, title = "title" (optional))
-ggRegression <- function(fit, title = "title") {
-
-require(ggplot2)
-
-ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) + 
-  geom_point() +
-  stat_smooth(
-    method = "lm",
-    geom = "smooth") +
-  labs(
-    title = title,
-    subtitle = paste("Adj R2 = ", signif(summary(fit)$adj.r.squared, 5), 
-                    "Intercept =", signif(fit$coef[[1]], 5 ), 
-                    " Slope =", signif(fit$coef[[2]], 5), 
-                    " P =", signif(summary(fit)$coef[2,4], 5)))
-}
 
 ```
+
+## Separate SLR Models
+
+We will start by fitting separate models to see if any of the three predictors of interest are associated with the outcome.
+
+### Part 1) Fitting SLR models
+
+__Fit separate simple linear regression models for assessing the association of total cholesterol level (cholesterol), total triglyceride level (triglyceride) and sinking pre-beta lipoprotein (spbl) with HDL (HDL) (mg/dL). Write the estimated regression equation and interpret the slope coefficient for each of the three models.__
 
 ```{r}
-
-#plotlyRegression: Scatterplot with line, SE, and summary statistics
-#requires a model to have been created beforehand
-#Usage: plotlyRegression(fit, title = "title" (optional))
-plotlyRegression <- function(fit, title = "title") {
-
-  require(plotly)
-
-  # Extract model data
-  df <- fit$model
-  x_var <- names(df)[2]
-  y_var <- names(df)[1]
-
-  # Create a scatter plot
-  p <- plot_ly(df, x = ~df[[x_var]], y = ~df[[y_var]], type = 'scatter', mode = 'markers')
-
-  # Get confidence interval data
-  confint_df <- data.frame(predict(fit, interval = "confidence"))
-  confint_df[[x_var]] <- df[[x_var]] # Adding the x variable to the dataframe
-
-  # Add linear regression line and 95% confidence interval
-  p <- p %>%
-    add_lines(
-      x = confint_df[[x_var]], 
-      y = confint_df$fit, 
-      line = list(color = '#0aca8d')
-    ) %>%
-    add_ribbons(
-      x = confint_df[[x_var]], 
-      ymin = confint_df$lwr,
-      ymax = confint_df$upr,
-      line = list(color = 'transparent'),
-      fillcolor = 'rgba(0, 100, 255, 0.2)'
-    )
-
-  # Create subtitle with summary statistics
-  subtitle <- paste("Adj R2 =", signif(summary(fit)$adj.r.squared, 5), 
-                    ", Intercept =", signif(fit$coef[[1]], 5), 
-                    ", Slope =", signif(fit$coef[[2]], 5), 
-                    ", P =", signif(summary(fit)$coef[2,4], 5))
-
-  # Add layout with combined title and subtitle
-  p <- p %>%
-    layout(
-      title = list(
-        text = paste0(title, '<br><sup>', subtitle, '</sup>'),
-        font = list(size = 16)
-      ),
-      plot_bgcolor = '#2c2c2c',
-      paper_bgcolor = '#2c2c2c',
-      font = list(color = '#ffffff'),
-      xaxis = list(title = x_var, color = '#ffffff'),
-      yaxis = list(title = y_var, color = '#ffffff')
-    )
-
-  return(p)
-}
-
-```
-
-```{r}
-
-# Function to summarize variables with optional grouping
-# Usage: summarize.var(dataset, var, group_var (optional))
-summarize.var <- function(dataset, var, group_var = NULL) {
-
-  require(tidyverse)
-  require(rlang)
-
-  result <- dataset %>%
-    {if (!is.null(group_var)) dplyr::group_by({{ group_var }}) else .} %>%
-    summarise(
-      mean = mean({{ var }}, na.rm = TRUE),
-      median = median({{ var }}, na.rm = TRUE),
-      min = min({{ var }}, na.rm = TRUE),
-      max = max({{ var }}, na.rm = TRUE),
-      q25 = quantile({{ var }}, 0.25, na.rm = TRUE), # first quartile
-      q75 = quantile({{ var }}, 0.75, na.rm = TRUE), # third quartile
-      sd = sd({{ var }}, na.rm = TRUE),
-      n = length(na.omit({{ var }}))
-    ) %>%
-    mutate(IQR = q75 - q25)
-
-  return(result)
-}
-
-```
-
-## Data Management
-
-```{r, message = FALSE}
-
-setwd("Lab1")
-load("workspace.RData")
-
-data <- read_xlsx("hwdata1.xlsx")
-kable(head(data), caption = "Table 1.")
-
-HDLsum <- summarize.var(data, HDL)
-Cholsum <- summarize.var(data, cholesterol)
-Trisum <- summarize.var(data, triglyceride)
-
-summary <- rbind(HDLsum, Cholsum, Trisum)
-summary$Variable <- c("HDL", "Cholesterol", "Triglyceride")
-summary <- summary %>%
-  select(Variable, everything()) %>%
-  data.frame()
-kable(summary)
-
-```
-
-# Separate SLR Models
-
-We will start by fitting separate models to see if any of the
- thre predictors of interest are associated with the outcome.
-
-## Part 1) Fitting SLR models
-
-__Fit separate simple linear regression models for assessing the association of__
-__total cholesterol level (cholesterol), total triglyceride level (triglyceride)__
-__and sinking pre-beta lipoprotein (spbl) with HDL (HDL) (mg/dL).__
-__Write the estimated regression equation and interpret the slope coefficient for each of the three models.__
-
-```{r}
+# REMINDER: syntax to fit SLR model is lm(outcome ~ predictor, data = data_name)
 
 # model with just cholesterol
-lmChol <- lm(HDL ~ cholesterol, data = data)
-#ggRegression(lmChol, title = "Fig 1. Plot of HDL by Cholesterol.")
-plotlyRegression(lmChol, title = "Fig 1. Plot of HDL by Cholesterol.")
+
 
 # model with just triglycerides
-lmTri <- lm(HDL ~ triglyceride, data = data)
-plotlyRegression(lmTri, title = "Fig 2. Plot of HDL by Triglycerides.")
-#ggRegression(lmTri, title = "Fig 2. Plot of HDL by Triglycerides.")
+
 
 # model with just sinking pre-beta
-lmSPBL <- glm(HDL ~ spbl, data = data)
-summ(lmSPBL)
 
 ## make sure to show the output for the models
-
 ```
 
 Regression models and interpretations here:
 
-## Part 2) Hypothesis testing in SLR models
+
+
+### Part 2) Hypothesis testing in SLR models
 
 __Using the separate models fit in part 1, test whether total cholesterol level, triglyceride level, and sinking pre-beta lipoprotein alone statistically significantly predict y. Interpret your answer.__
 
@@ -217,11 +71,11 @@ __Using the separate models fit in part 1, test whether total cholesterol level,
 
 
 
-# MLR models
+## MLR models
 
 We now wish to improve our estimation of HDL by incorporating multiple predictors in the same model. This will also allow us to assess possible confounding and effect modification. 
 
-## Part 3) MLR model equation
+### Part 3) MLR model equation
 
 __Write the theoretical (population) regression equation that would be used to test whether total cholesterol level, triglyceride level, and sinking pre-beta lipoprotein taken together statistically significantly improve prediction of HDL. Interpret the coefficients in this model.__
 
@@ -236,7 +90,7 @@ Model:
 Interpretations:
 
 
-## Part 4) Fitting a MLR model and performing a global test
+### Part 4) Fitting a MLR model and performing a global test
 
 __Fit the model specified above and test if total cholesterol level, triglyceride level, and sinking pre-beta lipoprotein taken together statistically significantly improve prediction of HDL. Interpret your answer. __
 
@@ -250,7 +104,7 @@ __Fit the model specified above and test if total cholesterol level, triglycerid
 
 
 
-## Part 5) Variable added test
+### Part 5) Variable added test
 
 __Fit a multivariable model and test whether sinking pre-beta (spbl) is associated with HDL after the combined contribution of cholesterol and triglyceride levels is taken into account (i.e., cholesterol and triglycerides are already in the model). Assume no interactions exist. State the appropriate null hypothesis for this test and interpret the results of the test.__
 
@@ -265,7 +119,7 @@ Null hypothesis:
 
 Test results and interpretation:
 
-## Part 6) Model for effect modification
+### Part 6) Model for effect modification
 
 __Suppose we are interested in evaluating if the association between cholesterol and HDL and the association between triglycerides and HDL depends on the absence/presence of SPBL. Write down the model statement for the model you need to fit to assess this and interpret the coefficients in this model.__
 
@@ -273,7 +127,7 @@ Model:
 
 Interpretation of coefficients:
 
-## Part 7) Testing for effect modification
+### Part 7) Testing for effect modification
 
 __Fit a multivariable model and test whether the interactions of cholesterol with SPBL and triglycerides with SPBL are simultaneously equal to zero in a model already containing the three main effects for cholesterol, triglycerides, and SPBL. State the null hypothesis of the test. Given the result of the test, what can you conclude about the relationship of HDL to both cholesterol and triglycerides (hint: remember what an interaction means)?__
 
@@ -293,7 +147,7 @@ Null hypothesis:
 
 Interpretation:
 
-## Part 8) Checking for confounding
+### Part 8) Checking for confounding
 
 __For sinking pre-beta lipoprotein (spbl), compare the coefficient for spbl in the full model (in part 4) to the simple model in parts 1 and 2. Do you think there is confounding due to cholesterol and triglycerides? Explain.__
 
@@ -305,7 +159,7 @@ __For sinking pre-beta lipoprotein (spbl), compare the coefficient for spbl in t
 
 Explanation:
 
-## Part 9) Model for different levels of categorical variables
+### Part 9) Model for different levels of categorical variables
 
 __Assume straight line models are appropriate for describing the relationship between HDL  and total cholesterol level for the absence and the presence of sinking pre-beta. Write out a single regression model that specifies two separate lines for the relationship between HDL and cholesterol, one for the absence of sinking pre-beta lipoprotein (spbl=0) and one for the presence of sinking pre-beta lipoprotein (spbl=1). (You can omit triglycerides from this model). Run code to fit this model.__
 
@@ -325,7 +179,7 @@ Model:
 
 
 
-## Part 10) Interaction vs stratification
+### Part 10) Interaction vs stratification
 
 __Fit separate models for each level of SPBL and compare these results to the results you got in part 9.__
 
@@ -340,7 +194,7 @@ __Fit separate models for each level of SPBL and compare these results to the re
 
 Explanation of similarities differences compared to part 9 here:
 
-## Part 11) Plotting separate lines
+### Part 11) Plotting separate lines
 
 __Plot the observed data and the fitted lines from part 9 for each value of sinking pre-beta (either 2 separate graphs with the same y axes or combined in one graph).__
 
@@ -351,7 +205,7 @@ __Plot the observed data and the fitted lines from part 9 for each value of sink
 
 Describe what you see:
 
-## Part 12) Testing for equality of lines
+### Part 12) Testing for equality of lines
 
 __Fit the model you need to test for coincidence (equality) of the two lines in part 9. Perform the test and interpret.__
 
@@ -364,7 +218,7 @@ __Fit the model you need to test for coincidence (equality) of the two lines in 
 Interpretation:
 
 
-## Part 13) Testing for parallel lines
+### Part 13) Testing for parallel lines
 
 __Fit the model you need to test for parallelism (equal slopes) of the two lines in part 9. Perform the test and interpret.__
 
@@ -376,7 +230,7 @@ __Fit the model you need to test for parallelism (equal slopes) of the two lines
 
 Interpretation
 
-## Part 14) Centering variables
+### Part 14) Centering variables
 
 __Center the cholesterol and triglyceride variables at their mean value and refit the model from part 9. How do the models compare (which coefficients change and which stay the same)? Interpret the intercept in both models.__
 
@@ -392,7 +246,7 @@ Interpretation of intercept in original model:
 
 Interpretation of intercept in new model with centered variables:
 
-## Part 15) Scaling varibales
+### Part 15) Scaling varibales
 
 __In this dataset, the units of measurement for cholesterol is mg/dL. Suppose we wish to convert this to mmol/L. To do so, we divide the value of cholesterol by 38.67. That is,__
 

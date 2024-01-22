@@ -1,0 +1,56 @@
+---
+title: "Interactive Regression Analysis"
+output: html_document
+runtime: shiny
+---
+
+## Interactive Scatterplot with Regression Line
+
+```{r regression-app, echo=FALSE}
+library(shiny)
+library(tidyverse)
+library(readxl)
+
+data <- read_xlsx("hwdata1.xlsx")
+# Define your ggRegression function here (make sure it's correct)
+ggRegression <- function(fit, title = "title") {
+  # Function definition...
+}
+
+# UI definition
+ui <- fluidPage(
+  titlePanel("Interactive Scatterplot with Regression Line"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("xvar", "Select X Variable:", choices = names(data)[-1]),
+      selectInput("yvar", "Select Y Variable:", choices = names(data)[1])
+    ),
+    mainPanel(
+      plotOutput("regPlot")
+    )
+  )
+)
+
+# Server logic
+server <- function(input, output) {
+  output$regPlot <- renderPlot({
+    # Check if the dataset exists
+    if (!exists("data")) {
+      stop("Dataset not found")
+    }
+
+    # Fit the model
+    fit <- lm(as.formula(paste(input$yvar, "~", input$xvar)), data = data)
+
+    # Call the ggRegression function
+    ggRegression(fit, title = paste(input$yvar, "vs", input$xvar))
+  }, error = function(e) {
+    # Error handling
+    print(e)
+  })
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
+
+```
