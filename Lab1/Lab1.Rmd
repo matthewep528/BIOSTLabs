@@ -1,56 +1,195 @@
 ---
 title: "M1 Lab"
-author: "YOUR NAME HERE"
-date: "Spring 2024"
+author: "Matthew Præstgaard"
+date: "due 01/31/2024"
 output:
-  html_document:
-    df_print: paged
-    toc: true
-    toc_depth: '3'
-    code_folding: show
+  rmdformats::downcute:
+    self_contained: true
+    default_style: "dark"
+    downcute_theme: "default"
+    code_folding: "show"
+  svglite:
+    fig.retina: 2
 ---
 
 ```{r,echo=FALSE,message=FALSE,warning=FALSE}
 require(knitr)
-# this line of code is added so that the file can be knitted even when error messages are produced by your code
-knitr::opts_chunk$set(error = T)
+knitr::opts_chunk$set(error = TRUE)
 ```
 
 ```{r, message=FALSE}
-# load libraries (you may need to install these if you never have before)
 library(tidyverse)
 library(readxl)
 library(car)
+library(plotly)
+library(ggthemr)
+ggthemr("flat dark")
+library(gridExtra)
+library(ggh4x)
+library(jtools)
+library(kableExtra)
 ```
 
+# Functions
+### All files can be found at https://github.com/matthewep528/BIOSTLabs
+
+```{r}
+# use to plot linear model with summary statistics and error
+# Usage: ggRegression(data, title = "title" (optional))
+ggRegression <- function(fit, title = "title") {
+  require(ggplot2)
+
+  ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) +
+    geom_point() +
+    stat_smooth(
+      method = "lm",
+      geom = "smooth"
+    ) +
+    labs(
+      title = title,
+      subtitle = paste(
+        "Adj R2 = ", signif(summary(fit)$adj.r.squared, 5),
+        "Intercept =", signif(fit$coef[[1]], 5),
+        " Slope =", signif(fit$coef[[2]], 5),
+        " P =", signif(summary(fit)$coef[2, 4], 5)
+      )
+    )
+}
+```
+
+```{r}
+# plotlyRegression: Scatterplot with line, SE, and summary statistics
+# requires a model to have been created beforehand
+# Usage: plotlyRegression(fit, title = "title" (optional))
+plotlyRegression <- function(fit, title = "title") {
+  require(plotly)
+
+  # Extract model data
+  df <- fit$model
+  x_var <- names(df)[2]
+  y_var <- names(df)[1]
+
+  # Create a scatter plot
+  p <- plot_ly(df, x = ~ df[[x_var]], y = ~ df[[y_var]], type = "scatter", mode = "markers")
+
+  # Get confidence interval data
+  confint_df <- data.frame(predict(fit, interval = "confidence"))
+  confint_df[[x_var]] <- df[[x_var]] # Adding the x variable to the dataframe
+
+  # Add linear regression line and 95% confidence interval
+  p <- p %>%
+    add_lines(
+      x = confint_df[[x_var]],
+      y = confint_df$fit,
+      line = list(color = "#0aca8d")
+    ) %>%
+    add_ribbons(
+      x = confint_df[[x_var]],
+      ymin = confint_df$lwr,
+      ymax = confint_df$upr,
+      line = list(color = "transparent"),
+      fillcolor = "rgba(0, 100, 255, 0.2)"
+    )
+
+  # Create subtitle with summary statistics
+  subtitle <- paste(
+    "Adj R2 =", signif(summary(fit)$adj.r.squared, 5),
+    ", Intercept =", signif(fit$coef[[1]], 5),
+    ", Slope =", signif(fit$coef[[2]], 5),
+    ", P =", signif(summary(fit)$coef[2, 4], 5)
+  )
+
+  # Add layout with combined title and subtitle
+  p <- p %>%
+    layout(
+      title = list(
+        text = paste0(title, "<br><sup>", subtitle, "</sup>"),
+        font = list(size = 16)
+      ),
+      plot_bgcolor = "#2c2c2c",
+      paper_bgcolor = "#2c2c2c",
+      font = list(color = "#ffffff"),
+      xaxis = list(title = x_var, color = "#ffffff"),
+      yaxis = list(title = y_var, color = "#ffffff")
+    )
+
+  return(p)
+}
+```
+
+```{r}
+# Function to summarize variables with optional grouping
+# Usage: summarize.var(dataset, var, group_var (optional))
+summarize.var <- function(dataset, var, group_var = NULL) {
+  require(tidyverse)
+  require(rlang)
+
+  result <- dataset %>%
+    {
+      if (!is.null(group_var)) dplyr::group_by({{ group_var }}) else .
+    } %>%
+    summarise(
+      mean = mean({{ var }}, na.rm = TRUE),
+      median = median({{ var }}, na.rm = TRUE),
+      min = min({{ var }}, na.rm = TRUE),
+      max = max({{ var }}, na.rm = TRUE),
+      q25 = quantile({{ var }}, 0.25, na.rm = TRUE), # first quartile
+      q75 = quantile({{ var }}, 0.75, na.rm = TRUE), # third quartile
+      sd = sd({{ var }}, na.rm = TRUE),
+      n = length(na.omit({{ var }}))
+    ) %>%
+    mutate(IQR = q75 - q25)
+
+  return(result)
+}
+```
 
 # Data Management
 
-```{r}
-# read in data using read_xlsx() function 
-# (don't forget to save it as an object with a name)
+```{r, message = FALSE}
+setwd("Lab1")
 
+data <- read_xlsx("hwdata1.xlsx")
+kable(head(data), caption = "Table 1.")
 
+HDLsum <- summarize.var(data, HDL)
+Cholsum <- summarize.var(data, cholesterol)
+Trisum <- summarize.var(data, triglyceride)
+
+summary <- rbind(HDLsum, Cholsum, Trisum)
+summary$Variable <- c("HDL", "Cholesterol", "Triglyceride")
+summary <- summary %>%
+  select(Variable, everything()) %>%
+  data.frame()
+kable(summary)
 ```
 
 ## Separate SLR Models
 
-We will start by fitting separate models to see if any of the three predictors of interest are associated with the outcome.
+We will start by fitting separate models to see if any of the
+ thre predictors of interest are associated with the outcome.
 
 ### Part 1) Fitting SLR models
 
-__Fit separate simple linear regression models for assessing the association of total cholesterol level (cholesterol), total triglyceride level (triglyceride) and sinking pre-beta lipoprotein (spbl) with HDL (HDL) (mg/dL). Write the estimated regression equation and interpret the slope coefficient for each of the three models.__
+__Fit separate simple linear regression models for assessing the association of__
+__total cholesterol level (cholesterol), total triglyceride level (triglyceride)__
+__and sinking pre-beta lipoprotein (spbl) with HDL (HDL) (mg/dL).__
+__Write the estimated regression equation and interpret the slope coefficient for each of the three models.__
 
 ```{r}
-# REMINDER: syntax to fit SLR model is lm(outcome ~ predictor, data = data_name)
-
 # model with just cholesterol
-
+lmChol <- lm(HDL ~ cholesterol, data = data)
+# ggRegression(lmChol, title = "Fig 1. Plot of HDL by Cholesterol.")
+plotlyRegression(lmChol, title = "Fig 1. Plot of HDL by Cholesterol.")
 
 # model with just triglycerides
-
+lmTri <- lm(HDL ~ triglyceride, data = data)
+plotlyRegression(lmTri, title = "Fig 2. Plot of HDL by Triglycerides.")
+# ggRegression(lmTri, title = "Fig 2. Plot of HDL by Triglycerides.")
 
 # model with just sinking pre-beta
+lmSPBL <- glm(HDL ~ spbl, data = data)
+summ(lmSPBL)
 
 ## make sure to show the output for the models
 ```
@@ -64,9 +203,7 @@ Regression models and interpretations here:
 __Using the separate models fit in part 1, test whether total cholesterol level, triglyceride level, and sinking pre-beta lipoprotein alone statistically significantly predict y. Interpret your answer.__
 
 ```{r}
-
-# show test/model output here 
-
+# show test/model output here
 ```
 
 
@@ -111,8 +248,7 @@ __Fit a multivariable model and test whether sinking pre-beta (spbl) is associat
 
 
 ```{r}
- # code for relevant test here (show your output)
-
+# code for relevant test here (show your output)
 ```
 
 Null hypothesis:
@@ -135,12 +271,9 @@ __Fit a multivariable model and test whether the interactions of cholesterol wit
 
 
 ```{r}
-
 # code to fit model
 
 # test
-
-
 ```
 
 Null hypothesis:
@@ -152,9 +285,7 @@ Interpretation:
 __For sinking pre-beta lipoprotein (spbl), compare the coefficient for spbl in the full model (in part 4) to the simple model in parts 1 and 2. Do you think there is confounding due to cholesterol and triglycerides? Explain.__
 
 ```{r}
-
 # code to check for confounding
-
 ```
 
 Explanation:
@@ -169,11 +300,9 @@ Model:
 
 
 ```{r}
-
 # fit model
 
 ## make sure to show the output for the model
-
 ```
 
 
@@ -184,7 +313,6 @@ Model:
 __Fit separate models for each level of SPBL and compare these results to the results you got in part 9.__
 
 ```{r}
-
 # fit model for SPBL = 0
 
 # fit model for SPBL = 1
@@ -199,8 +327,7 @@ Explanation of similarities differences compared to part 9 here:
 __Plot the observed data and the fitted lines from part 9 for each value of sinking pre-beta (either 2 separate graphs with the same y axes or combined in one graph).__
 
 ```{r}
- # plot
-
+# plot
 ```
 
 Describe what you see:
@@ -210,9 +337,7 @@ Describe what you see:
 __Fit the model you need to test for coincidence (equality) of the two lines in part 9. Perform the test and interpret.__
 
 ```{r}
-
 # test for equality of lines
-
 ```
 
 Interpretation:
@@ -223,9 +348,7 @@ Interpretation:
 __Fit the model you need to test for parallelism (equal slopes) of the two lines in part 9. Perform the test and interpret.__
 
 ```{r}
-
 # test for parallel lines (equal slopes)
-
 ```
 
 Interpretation
@@ -239,7 +362,7 @@ __Center the cholesterol and triglyceride variables at their mean value and refi
 
 # refit models with centered values
 
-## make sure to show the output 
+## make sure to show the output
 ```
 
 Interpretation of intercept in original model:
@@ -255,12 +378,11 @@ $$x \text{ mg/dL} = x \text{ mg/dL}\frac{1 \text{ mmol/L}}{38.67\text{ mg/dL}} =
 __Apply this transformation and compare the simple linear regression model you fit in part 1 for cholesterol to a new model using the (uncentered) cholesterol value measured in mmol/L. What do you notice about the new regression coefficients?__
 
 ```{r}
-
 # rescale variable
 
 # refit model and compare to original model
 
-## make sure to show the output 
+## make sure to show the output
 ```
 
 Interpretation: 
