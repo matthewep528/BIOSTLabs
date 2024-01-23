@@ -28,6 +28,7 @@ library(gridExtra)
 library(ggh4x)
 library(jtools)
 library(kableExtra)
+library(shiny)
 ```
 
 # Functions
