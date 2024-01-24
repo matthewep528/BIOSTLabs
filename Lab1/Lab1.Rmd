@@ -10,7 +10,10 @@ output:
     code_folding: "show"
   svglite:
     fig.retina: 2
+  runtime: shiny
 ---
+
+### All files can be found at https://github.com/matthewep528/BIOSTLabs
 
 ```{r,echo=FALSE,message=FALSE,warning=FALSE}
 require(knitr)
@@ -32,7 +35,6 @@ library(shiny)
 ```
 
 # Functions
-### All files can be found at https://github.com/matthewep528/BIOSTLabs
 
 ```{r}
 # use to plot linear model with summary statistics and error
