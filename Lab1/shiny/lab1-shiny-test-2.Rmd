@@ -1,0 +1,97 @@
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(plotly)
+library(tidyverse)
+library(shiny)
+library(rsconnect)
+library(ggthemr)
+ggthemr("flat dark")
+library(rsconnect)
+
+load("shiny.RData")
+source("plotlyRegression.r")
+
+ui <- fluidPage(
+    titlePanel("Dynamic Regression Analysis"),
+    sidebarLayout(
+        sidebarPanel(
+            selectInput("xvar", "Choose X Variable", choices = names(data)),
+            selectInput("yvar", "Choose Y Variable", choices = names(data))
+        ),
+        mainPanel(
+            plotlyOutput("regPlot", height = "900px", width = "auto"),
+            tableOutput("summaryStats")
+        )
+    )
+)
+
+# Define server logic
+server <- function(input, output) {
+    # Reactive expression for the formula
+
+    reactive_summary <- reactive({
+        if (!input$xvar %in% names(data) || !input$yvar %in% names(data)) {
+            return(NULL)
+        }
+        fit <- reactive_model()
+        if (length(fit$coefficients) < 2) {
+            return(NULL)
+        }
+        summary_stats <- summary(fit)
+        data.frame(
+            Adjusted_R2 = summary_stats$adj.r.squared,
+            Intercept = coef(fit)[1], # Extracting intercept
+            Slope = coef(fit)[2], # Extracting slope
+            P_value = coef(summary(fit))[2, 4] # Extracting p-value for slope
+        )
+    })
+
+    # Render the Plotly plot
+    output$regPlot <- renderPlotly({
+        # (existing code to validate input and fetch the model)
+
+        # Call the plotlyRegression function (make sure to replace ggRegression with plotlyRegression)
+        plotlyRegression(fit, title = paste(input$yvar, "vs", input$xvar))
+    })
+
+    # Render the summary statistics table
+    output$summaryStats <- renderTable({
+        reactive_summary()
+    })
+
+    reactive_formula <- reactive({
+        as.formula(paste(input$yvar, "~", input$xvar))
+    })
+
+    # Reactive expression for the model
+    reactive_model <- reactive({
+        lm(reactive_formula(), data = data)
+    })
+
+    output$regPlot <- renderPlotly({
+        # Validate input
+        if (!input$xvar %in% names(data) || !input$yvar %in% names(data)) {
+            return()
+        }
+
+        # Fetch the model
+        fit <- reactive_model()
+
+        # Debugging: print the formula and check coefficients
+        print(reactive_formula())
+        print(fit$coefficients)
+
+        # Check if the model was correctly fitted
+        if (length(fit$coefficients) < 2) {
+            return() # Can add a message to user about invalid model
+        }
+
+        # Call the plotlyRegression function
+        plotlyRegression(fit, title = paste(input$yvar, "vs", input$xvar))
+    })
+}
+
+
+
+# Run the app
+shinyApp(ui = ui, server = server)
+```
