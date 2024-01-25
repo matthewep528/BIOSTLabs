@@ -153,7 +153,8 @@ summarize.var <- function(dataset, var, group_var = NULL) {
 ```{r, message = FALSE}
 setwd("Lab1")
 
-data <- read_xlsx("hwdata1.xlsx")
+data <- read_xlsx("hwdata1.xlsx") %>%
+  mutate(spbl = as.factor(spbl))
 kable(head(data), caption = "Table 1.")
 
 HDLsum <- summarize.var(data, HDL)
@@ -166,6 +167,27 @@ summary <- summary %>%
   select(Variable, everything()) %>%
   data.frame()
 kable(summary)
+```
+
+```{r}
+
+setWorkingDirectory <- function() {
+  # Check the operating system
+  if (.Platform$OS.type == "unix") {
+    # Check the working directory
+    if (!file.exists("BIOSTLabs/Lab1")) {
+      setwd("BIOSTLabs/Lab1")
+    }
+  } else if (.Platform$OS.type == "windows") {
+    # Check the working directory
+    if (!file.exists("BIOSTLabs/Lab1")) {
+      setwd("BIOSTLabs/Lab1")
+    }
+  } else {
+    cat("Unsupported operating system")
+  }
+}
+
 ```
 
 ## Separate SLR Models
