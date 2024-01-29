@@ -160,6 +160,8 @@ current_dir <- basename(getwd())
 if (current_dir != "Lab1") {
   setwd("Lab1")
 }
+
+load("Lab1.RData")
 ```
 
 ```{r, message = FALSE}
