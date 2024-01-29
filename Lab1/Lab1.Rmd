@@ -166,7 +166,7 @@ load("Lab1.RData")
 
 ```{r, message = FALSE}
 data <- read_xlsx("hwdata1.xlsx") %>%
-  mutate(spbl = as.factor(spbl))
+  mutate(spbl = as.factor(spbl)) #changing spb1 to factor
 kable(head(data), caption = "Table 1.")
 
 HDLsum <- summarize.var(data, HDL)
@@ -178,9 +178,8 @@ summary$Variable <- c("HDL", "Cholesterol", "Triglyceride")
 summary <- summary %>%
   select(Variable, everything()) %>%
   data.frame()
-kable(summary)
+kable(summary, caption = "Table 2. Summary Statistics of Continuous Variables")
 ```
-
 
 # Separate SLR Models
 
@@ -197,19 +196,20 @@ __Write the estimated regression equation and interpret the slope coefficient fo
 ```{r}
 # model with just cholesterol
 lmChol <- lm(HDL ~ cholesterol, data = data)
-# ggRegression(lmChol, title = "Fig 1. Plot of HDL by Cholesterol.")
+summ(lmChol)
 plotlyRegression(lmChol, title = "Fig 1. Plot of HDL by Cholesterol.")
 
 # model with just triglycerides
 lmTri <- lm(HDL ~ triglyceride, data = data)
 plotlyRegression(lmTri, title = "Fig 2. Plot of HDL by Triglycerides.")
-# ggRegression(lmTri, title = "Fig 2. Plot of HDL by Triglycerides.")
+summ(lmTri)
 
 # model with just sinking pre-beta
 lmSPBL <- glm(HDL ~ spbl, data = data)
 summ(lmSPBL)
 
-knitr::include_app("https://vpkjjn-matthewep528.shinyapps.io/lab1-shiny-test-2/")
+#knitr::include_app("https://vpkjjn-matthewep528.shinyapps.io/lab1-shiny-test-2/")
+#a (mostly failed) shiny app I was testing
 ## make sure to show the output for the models
 ```
 
@@ -246,12 +246,12 @@ Interpretations:
 
 ## Part 4) Fitting a MLR model and performing a global test
 
-__Fit the model specified above and test if total cholesterol level, triglyceride level, and sinking pre-beta lipoprotein taken together statistically significantly improve prediction of HDL. Interpret your answer. __
+__Fit the model specified above and test if total cholesterol level, triglyceride level, and sinking pre-beta lipoprotein taken together statistically significantly improve prediction of HDL. Interpret your answer.__
 
 ```{r}
 # fit MLR model
-# REMINDER: syntax for 2 predictors is lm(outcome ~ predictor1 + predictor2, data = data_name)
-
+MLR <- lm(HDL ~ triglyceride + cholesterol + spbl, data = data)
+summ(MLR)
 ## make sure to show the output for the model
 ```
 
