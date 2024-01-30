@@ -10,7 +10,6 @@ output:
     code_folding: "show"
   svglite:
     fig.retina: 2
-runtime: shiny
 ---
 
 ### All files can be found at https://github.com/matthewep528/BIOSTLabs
@@ -29,10 +28,8 @@ library(ggthemr)
 ggthemr("flat dark")
 library(gridExtra)
 library(ggh4x)
-library(jtools)
 library(kableExtra)
-library(shiny)
-library(rsconnect)
+library(jtools)
 ```
 
 # Housekeeping
@@ -153,20 +150,9 @@ summarize.var <- function(dataset, var, group_var = NULL) {
 
 ## Data Management
 
-```{r}
-# Change working directory to proper folder
-current_dir <- basename(getwd())
-
-if (current_dir != "Lab1") {
-  setwd("Lab1")
-}
-
-load("Lab1.RData")
-```
-
 ```{r, message = FALSE}
 data <- read_xlsx("hwdata1.xlsx") %>%
-  mutate(spbl = as.factor(spbl)) #changing spb1 to factor
+  mutate(spbl = as.factor(spbl)) # changing spb1 to factor
 kable(head(data), caption = "Table 1.")
 
 HDLsum <- summarize.var(data, HDL)
@@ -197,21 +183,32 @@ __Write the estimated regression equation and interpret the slope coefficient fo
 # model with just cholesterol
 lmChol <- lm(HDL ~ cholesterol, data = data)
 summ(lmChol)
-plotlyRegression(lmChol, title = "Fig 1. Plot of HDL by Cholesterol.")
 
 # model with just triglycerides
 lmTri <- lm(HDL ~ triglyceride, data = data)
-plotlyRegression(lmTri, title = "Fig 2. Plot of HDL by Triglycerides.")
 summ(lmTri)
 
 # model with just sinking pre-beta
-lmSPBL <- glm(HDL ~ spbl, data = data)
+lmSPBL <- lm(HDL ~ spbl, data = data)
 summ(lmSPBL)
 
-#knitr::include_app("https://vpkjjn-matthewep528.shinyapps.io/lab1-shiny-test-2/")
-#a (mostly failed) shiny app I was testing
-## make sure to show the output for the models
+plotlyRegression(lmChol, title = "Fig 1. Plot of HDL by Cholesterol.")
+plotlyRegression(lmTri, title = "Fig 2. Plot of HDL by Triglycerides.")
+
+getRegressionEquation <- function(model, responseVar, predictorVar) {
+  coefficients <- coef(model)
+  equation <- sprintf("%s = %.2f + %.2f * %s", responseVar, coefficients[1], coefficients[2], predictorVar)
+  return(equation)
+}
+
+equationTri <- getRegressionEquation(lmTri, "HDL", "triglyceride")
+equationChol <- getRegressionEquation(lmChol, "HDL", "cholesterol")
+equationSPBL <- getRegressionEquation(lmSPBL, "HDL", "spbl")
 ```
+
+$$\displaystyle{\displaylines{HDL = 52.47 + -0.02 * cholesterol}}$$
+$$\displaystyle{\displaylines{HDL = 46.25 + 0.01 * triglyceride}}$$
+$$\displaystyle{\displaylines{HDL = 43.77 + 8.38 * spbl}}$$
 
 Regression models and interpretations here:
 
