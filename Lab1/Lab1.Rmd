@@ -205,9 +205,11 @@ equationTri <- getRegressionEquation(lmTri, "HDL", "triglyceride")
 equationChol <- getRegressionEquation(lmChol, "HDL", "cholesterol")
 equationSPBL <- getRegressionEquation(lmSPBL, "HDL", "spbl")
 ```
-
+**Cholesterol**  
 $$\displaystyle{\displaylines{HDL = 52.47 + -0.02 * cholesterol}}$$
+**Triglyceride**  
 $$\displaystyle{\displaylines{HDL = 46.25 + 0.01 * triglyceride}}$$
+**Sinking Pre-Beta**  
 $$\displaystyle{\displaylines{HDL = 43.77 + 8.38 * spbl}}$$
 
 Regression models and interpretations here:
@@ -230,15 +232,13 @@ We now wish to improve our estimation of HDL by incorporating multiple predictor
 
 __Write the theoretical (population) regression equation that would be used to test whether total cholesterol level, triglyceride level, and sinking pre-beta lipoprotein taken together statistically significantly improve prediction of HDL. Interpret the coefficients in this model.__
 
-<span style="color: blue;">
-*Note*: for the regression equation you may use latex code such as: 
-$$y = \beta_0 + \beta_1x_1 + \epsilon $$
-or you can just use regular text: y = b0 + b1*x + e
-</span>
+**Model:**
 
-Model:
+$$
+\displaystyle{\displaylines{E(HDL) = \beta_{0} +\beta_{1}(Cholesterol)+ \beta_{2}(Triglyceride)+\beta_{3}(SPBl)}}
+$$
 
-Interpretations:
+**Interpretations:**
 
 
 ## Part 4) Fitting a MLR model and performing a global test
@@ -247,8 +247,9 @@ __Fit the model specified above and test if total cholesterol level, triglycerid
 
 ```{r}
 # fit MLR model
-MLR <- lm(HDL ~ triglyceride + cholesterol + spbl, data = data)
+MLR <- lm(HDL ~ cholesterol + triglyceride + spbl, data = data)
 summ(MLR)
+
 ## make sure to show the output for the model
 ```
 
@@ -262,12 +263,14 @@ __Fit a multivariable model and test whether sinking pre-beta (spbl) is associat
 
 
 ```{r}
-# code for relevant test here (show your output)
+aovSPB <- anova(lmSPBL, MLR)
+kable(aovSPB)
 ```
 
-Null hypothesis:
+**Null hypothesis:** Sinking pre-beta is not associated with HDL after accounting for cholesterol and triglyceride levels.
 
-Test results and interpretation:
+**Test results and interpretation:** **p = 0.66**  
+We conclude that, after accounting for cholesterol and triglyceride levels, sinking pre-beta is not associated with HDL.
 
 ## Part 6) Model for effect modification
 
