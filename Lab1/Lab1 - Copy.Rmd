@@ -1,0 +1,356 @@
+---
+title: "M1 Lab"
+author: "YOUR NAME HERE"
+date: "Spring 2024"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+require(knitr)
+knitr::opts_chunk$set(error = TRUE)
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+library(readxl)
+library(car)
+library(gridExtra)
+library(ggh4x)
+library(jtools)
+```
+
+# Housekeeping
+
+## Functions
+
+```{r}
+# use to plot linear model with summary statistics and error
+# Usage: ggRegression(data, title = "title" (optional))
+ggRegression <- function(fit, title = "title") {
+  require(ggplot2)
+
+  ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) +
+    geom_point() +
+    stat_smooth(
+      method = "lm",
+      geom = "smooth"
+    ) +
+    labs(
+      title = title,
+      subtitle = paste(
+        "Adj R2 = ", signif(summary(fit)$adj.r.squared, 5),
+        "Intercept =", signif(fit$coef[[1]], 5),
+        " Slope =", signif(fit$coef[[2]], 5),
+        " P =", signif(summary(fit)$coef[2, 4], 5)
+      )
+    )
+}
+```
+
+## Data Management
+
+```{r, message = FALSE}
+data <- read_xlsx("C:\\Users\\jenny\\OneDrive - University of Pittsburgh\\Desktop\\Reg Analysis\\M1\\M1 Lab\\hwdata1.xlsx") %>%
+  mutate(spbl = as.factor(spbl)) # changing spb1 to factor
+kable(head(data))
+```
+
+# Separate SLR Models
+
+We will start by fitting separate models to see if any of the
+ thre predictors of interest are associated with the outcome.
+
+## Part 1) Fitting SLR models
+
+__Fit separate simple linear regression models for assessing the association of__
+__total cholesterol level (cholesterol), total triglyceride level (triglyceride)__
+__and sinking pre-beta lipoprotein (spbl) with HDL (HDL) (mg/dL).__
+__Write the estimated regression equation and interpret the slope coefficient for each of the three models.__
+
+```{r}
+# model with just cholesterol
+lmChol <- lm(HDL ~ cholesterol, data = data)
+summary(lmChol)
+
+# model with just triglycerides
+lmTri <- lm(HDL ~ triglyceride, data = data)
+summary(lmTri)
+
+# model with just sinking pre-beta
+lmSPBL <- lm(HDL ~ spbl, data = data)
+summary(lmSPBL)
+
+ggRegression(lmChol, title = "Fig 1. Plot of HDL by Cholesterol.")
+ggRegression(lmTri, title = "Fig 2. Plot of HDL by Triglycerides.")
+
+getRegressionEquation <- function(model, responseVar, predictorVar) {
+  coefficients <- coef(model)
+  equation <- sprintf("%s = %.2f + %.2f * %s", responseVar, coefficients[1], coefficients[2], predictorVar)
+  return(equation)
+}
+
+equationTri <- getRegressionEquation(lmTri, "HDL", "triglyceride")
+equationChol <- getRegressionEquation(lmChol, "HDL", "cholesterol")
+equationSPBL <- getRegressionEquation(lmSPBL, "HDL", "spbl")
+```
+**Cholesterol**  
+$$\displaystyle{\displaylines{HDL = 52.47 + -0.02 * cholesterol}}$$
+**Triglyceride**  
+$$\displaystyle{\displaylines{HDL = 46.25 + 0.01 * triglyceride}}$$
+**Sinking Pre-Beta**  
+$$\displaystyle{\displaylines{HDL = 43.77 + 8.38 * spbl}}$$
+
+Regression models and interpretations here:
+
+## Part 2) Hypothesis testing in SLR models
+
+__Using the separate models fit in part 1, test whether total cholesterol level, triglyceride level, and sinking pre-beta lipoprotein alone statistically significantly predict y. Interpret your answer.__
+
+```{r}
+# show test/model output here
+```
+
+
+
+# MLR models
+
+We now wish to improve our estimation of HDL by incorporating multiple predictors in the same model. This will also allow us to assess possible confounding and effect modification. 
+
+## Part 3) MLR model equation
+
+__Write the theoretical (population) regression equation that would be used to test whether total cholesterol level, triglyceride level, and sinking pre-beta lipoprotein taken together statistically significantly improve prediction of HDL. Interpret the coefficients in this model.__
+
+**Model:**
+
+$$
+\displaystyle{\displaylines{E(HDL) = \beta_{0} +\beta_{1}(Cholesterol)+ \beta_{2}(Triglyceride)+\beta_{3}(SPBl)}}
+$$
+
+**Interpretations:**
+
+
+## Part 4) Fitting a MLR model and performing a global test
+
+__Fit the model specified above and test if total cholesterol level, triglyceride level, and sinking pre-beta lipoprotein taken together statistically significantly improve prediction of HDL. Interpret your answer.__
+
+```{r}
+# fit MLR model
+MLR <- lm(HDL ~ cholesterol + triglyceride + spbl, data = data)
+summary(MLR)
+
+## make sure to show the output for the model
+```
+
+
+
+
+## Part 5) Variable added test
+
+__Fit a multivariable model and test whether sinking pre-beta (spbl) is associated with HDL after the combined contribution of cholesterol and triglyceride levels is taken into account (i.e., cholesterol and triglycerides are already in the model). Assume no interactions exist. State the appropriate null hypothesis for this test and interpret the results of the test.__
+
+
+
+```{r}
+aovSPB <- anova(lmSPBL, MLR)
+kable(aovSPB)
+```
+
+**Null hypothesis:** Sinking pre-beta is not associated with HDL after accounting for cholesterol and triglyceride levels.
+
+**Test results and interpretation:** **p = 0.66**  
+We conclude that, after accounting for cholesterol and triglyceride levels, sinking pre-beta is not associated with HDL.
+
+## Part 6) Model for effect modification
+
+__Suppose we are interested in evaluating if the association between cholesterol and HDL and the association between triglycerides and HDL depends on the absence/presence of SPBL. Write down the model statement for the model you need to fit to assess this and interpret the coefficients in this model.__
+
+Model:  
+$$\displaystyle{\displaylines{HDL = \beta_0 + \beta_1 \cdot \text{Cholesterol} + \beta_2 \cdot \text{Triglyceride} + \beta_3 \cdot \text{SPBL} + \beta_4 \cdot (\text{Cholesterol} \times \text{SPBL}) + \beta_5 \cdot (\text{Triglyceride} \times \text{SPBL}) + \epsilon}}$$
+
+Interpretation of coefficients:  
+β₀ (Intercept): Expected HDL level when cholesterol, triglycerides, and SPBL are all zero.  
+β₁ (Cholesterol): Change in HDL for a one-unit increase in cholesterol, assuming SPBL is absent.  
+β₂ (Triglyceride): Change in HDL for a one-unit increase in triglycerides, assuming SPBL is absent.  
+β₃ (SPBL): Difference in HDL when SPBL is present versus absent, keeping other variables constant.  
+β₄ (Cholesterol × SPBL): Change in the effect of cholesterol on HDL due to the presence of SPBL.  
+β₅ (Triglyceride × SPBL): Change in the effect of triglycerides on HDL due to the presence of SPBL.  
+
+## Part 7) Testing for effect modification
+
+__Fit a multivariable model and test whether the interactions of cholesterol with SPBL and triglycerides with SPBL__
+__are simultaneously equal to zero in a model already containing the three main effects for cholesterol, triglycerides, and SPBL.__
+__State the null hypothesis of the test. Given the result of the test, what can you conclude about the relationship of HDL to both__
+__cholesterol and triglycerides (hint: remember what an interaction means)?__
+
+
+
+
+```{r}
+# code to fit model
+spblEM <- lm(HDL ~ cholesterol + triglyceride + spbl + cholesterol:spbl + triglyceride:spbl, data = data)
+# test
+summary(spblEM)
+```
+
+**Null hypothesis:** $$\displaystyle{\displaylines{β(cholesterol):SPBL=β(triglyceride):SPBL=0}}$$
+
+**Interpretation:** **p = 0.1523**
+From this p-value, we fail to reject the null hypothesis that the interactions between
+cholesterol and SPBL and between triglycerides and SPBL are not significantly different from zero.
+
+## Part 8) Checking for confounding
+
+__For sinking pre-beta lipoprotein (spbl), compare the coefficient for spbl in the full model (in part 4) to the simple model in parts 1 and 2. Do you think there is confounding due to cholesterol and triglycerides? Explain.__
+
+```{r}
+simpleModel <- lm(HDL ~ spbl, data = data)
+fullModel <- lm(HDL ~ spbl + cholesterol + triglyceride, data = data)
+
+coef(simpleModel)
+coef(fullModel)
+```
+
+**Explanation:**
+8.38 in the old vs 8.15 in the new model. 
+This difference in the coefficients is relatively small, indicating that there is not substantial confounding.
+
+## Part 9) Model for different levels of categorical variables
+
+__Assume straight line models are appropriate for describing the relationship between HDL  and total cholesterol level for the absence and the presence of sinking pre-beta. Write out a single regression model that specifies two separate lines for the relationship between HDL and cholesterol, one for the absence of sinking pre-beta lipoprotein (spbl=0) and one for the presence of sinking pre-beta lipoprotein (spbl=1). (You can omit triglycerides from this model). Run code to fit this model.__
+
+
+Model:
+$$HDL = \beta_0 + \beta_1 \cdot \text{Cholesterol} + \beta_2 \cdot \text{spbl} + \beta_3 \cdot (\text{Cholesterol} \times \text{spbl})$$
+
+
+
+```{r}
+# fit model
+part9lm <- lm(HDL ~ cholesterol + spbl + cholesterol:spbl, data = data)
+summary(part9lm)
+## make sure to show the output for the model
+```
+
+
+
+
+## Part 10) Interaction vs stratification
+
+__Fit separate models for each level of SPBL and compare these results to the results you got in part 9.__
+
+```{r}
+# Subset data for spbl = 0 and spbl = 1
+data_spbl0 <- subset(data, spbl == 0)
+data_spbl1 <- subset(data, spbl == 1)
+
+# Fit separate models
+model_spbl0 <- lm(HDL ~ cholesterol, data = data_spbl0)
+model_spbl1 <- lm(HDL ~ cholesterol, data = data_spbl1)
+
+# Output the summaries of the models
+summary(model_spbl0)
+summary(model_spbl1)
+```
+
+**When SPBL is Absent (model_spbl0):**  
+Coefficient of cholesterol: -0.03405 (not statistically significant, p = 0.275)  
+
+**When SPBL is Present (model_spbl1):**   
+Coefficient of cholesterol: 0.007941 (not statistically significant, p = 0.861066)
+
+## Part 11) Plotting separate lines
+
+__Plot the observed data and the fitted lines from part 9 for each value of sinking pre-beta (either 2 separate graphs with the same y axes or combined in one graph).__
+
+```{r, message = FALSE}
+data %>%
+  ggplot(aes(x = cholesterol, y = HDL, color = spbl)) +
+  geom_point() +
+  geom_smooth(
+    method = "lm",
+    aes(fill = spbl)
+  )
+```
+
+Describe what you see:
+
+## Part 12) Testing for equality of lines
+
+__Fit the model you need to test for coincidence (equality) of the two lines in part 9. Perform the test and interpret.__
+
+```{r}
+equalLines <- lm(HDL ~ cholesterol, data = data)
+anova(equalLines, part9lm) %>%
+  summary()
+```
+
+Interpretation: **p = 0.4324**
+With the p-value calculated, we  fail to reject the null hypothesis,
+suggesting no significant difference in the relationships across the two SPBL levels. We may consider the lines equal.
+
+
+## Part 13) Testing for parallel lines
+
+__Fit the model you need to test for parallelism (equal slopes) of the two lines in part 9. Perform the test and interpret.__
+
+```{r}
+parallelLines <- lm(HDL ~ cholesterol + spbl, data = data)
+anova(parallelLines, part9lm) %>%
+  summary()
+```
+
+Interpretation
+
+## Part 14) Centering variables
+
+__Center the cholesterol and triglyceride variables at their mean value and refit the model from part 9. How do the models compare (which coefficients change and which stay the same)? Interpret the intercept in both models.__
+
+```{r}
+# center values
+data <- data %>%
+  mutate(
+    cholesterol_centered = cholesterol - mean(cholesterol),
+    triglyceride_centered = triglyceride - mean(triglyceride)
+  )
+
+centeredModel <- lm(HDL ~ cholesterol_centered + spbl + cholesterol_centered:spbl, data = data)
+summary(centeredModel)
+```
+
+Interpretation of intercept in original model:
+
+Interpretation of intercept in new model with centered variables:
+
+## Part 15) Scaling varibales
+
+__In this dataset, the units of measurement for cholesterol is mg/dL. Suppose we wish to convert this to mmol/L. To do so, we divide the value of cholesterol by 38.67. That is,__
+
+$$x \text{ mg/dL} = x \text{ mg/dL}\frac{1 \text{ mmol/L}}{38.67\text{ mg/dL}} =\frac{x}{38.67}\text{ mmol/L}$$
+
+__Apply this transformation and compare the simple linear regression model you fit in part 1 for cholesterol to a new model using the (uncentered) cholesterol value measured in mmol/L. What do you notice about the new regression coefficients?__
+
+```{r}
+# Convert cholesterol to mmol/L
+data <- data %>%
+  mutate(cholesterol_mmolL = cholesterol / 38.67)
+
+model_mmolL <- lm(HDL ~ cholesterol_mmolL, data = data)
+summary(model_mmolL)
+ggRegression(model_mmolL, title = "Plot of HDL by Cholesterol (mmol/L)")
+```
+
+**Interpretation:** 
+The coefficient now represents the change in HDL for a one-unit change in cholesterol measured in mmol/L.
+However, the adj-R2 and p-value remain the same. The new coefficient has changed, but the shape of the graph remains the same.
+
+# Session Information
+
+```{r}
+sessionInfo()
+```
+
