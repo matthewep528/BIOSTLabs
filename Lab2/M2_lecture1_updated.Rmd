@@ -1,0 +1,342 @@
+---
+title: 'Lecture Code M2: Part 1'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+library(here)
+library(labelled)
+library(car)
+library(readxl)
+library(psych)
+library(MASS)
+
+# the here package helps keep your paths/files organized (but you don't have to if you don't want to)
+# I have an R project (.RProj) in my main folder for this class
+# I keep this lecture code file in a subfolder for Module 2 in another subfolder for Notes
+# you can delete this and just change the path names to read in the data later to your computer's path name if that's easier
+here::i_am("Notes/Module 2/M2_lecture1_updated.Rmd")
+
+```
+
+# Lecture 1
+## SLR Model Checking
+
+Using simulated data to demonstrate checking assumptions in SLR.
+
+```{r}
+set.seed(1234)
+# linear model
+x = runif(n=50, max = 10)
+y = 5 + 2*x + rnorm(n=50, sd = 2.5)
+
+dflinear = data.frame(x = x, y = y)
+linearfit = lm(y~x, data = dflinear)
+
+dflinear = dflinear %>% 
+  mutate(residual = linearfit$residuals,
+           fitted = linearfit$fitted.values)
+# plot y by x
+dflinear %>%
+  ggplot(aes(x = x, y = y)) + 
+  geom_point() + 
+  theme_bw() + 
+  labs(title = "Plot Outcome by Predictor",
+       subtitle = "Linear Model") + 
+  geom_smooth(method = "lm", se = F)
+
+# plot residuals by x
+dflinear %>%
+  ggplot(aes(x = x, y = residual)) + 
+  geom_point() + 
+  theme_bw() + 
+  geom_hline(yintercept = 0) + 
+  labs(title = "Plot Residual by Predictor",
+       subtitle = "Linear Model")
+
+# plot residuals by fitted values
+dflinear %>%
+  ggplot(aes(x = fitted, y = residual)) + 
+  geom_point() + 
+  theme_bw() + 
+  geom_hline(yintercept = 0) + 
+  labs(title = "Plot Residual by Fitted Value",
+       subtitle = "Linear Model")
+
+
+# linear model
+yq = 5 + 2*x + 0.5*x^2 + rnorm(n=50, sd = 2.5)
+
+dfquad = data.frame(x = x, y = yq)
+quadfit = lm(y~x, data = dfquad)
+
+dfquad = dfquad %>% 
+  mutate(residual = quadfit$residuals,
+           fitted = quadfit$fitted.values)
+# plot y by x
+dfquad %>%
+  ggplot(aes(x = x, y = y)) + 
+  geom_point() + 
+  theme_bw() + 
+  labs(title = "Plot Outcome by Predictor",
+       subtitle = "Quadratic Model") + 
+  geom_smooth(method = "lm", se = F)
+
+# plot residuals by x
+dfquad %>%
+  ggplot(aes(x = x, y = residual)) + 
+  geom_point() + 
+  theme_bw() + 
+  geom_hline(yintercept = 0) + 
+  labs(title = "Plot Residual by Predictor",
+       subtitle = "Quadratic Model")
+
+# plot residuals by fitted values
+dfquad %>%
+  ggplot(aes(x = fitted, y = residual)) + 
+  geom_point() + 
+  theme_bw() + 
+  geom_hline(yintercept = 0) + 
+  labs(title = "Plot Residual by Fitted Value",
+       subtitle = "Quadratic Model")
+
+```
+
+## Data Management
+
+```{r}
+# data dictionary misspecified sex coding (68% of sample was male)
+# if you don't want to use the here() function just use read_excel("path/on/your/computer") instead
+ultra_full = read_excel(here("Notes","Datasets","ultrarunning.xlsx")) %>% 
+  mutate(sex = factor(sex, levels = c(1,2), labels = c("Female","Male")),
+         pb_surface = factor(pb_surface, levels = c(1,2,3,4), labels = c("Trail","Track","Road","Mix")))
+
+# I'm dropping the missing values in the variables that I'm using so I always use the same observations (complete case analysis)
+ultra = ultra_full %>% drop_na(pb100k_dec,sex,age,pb_elev,avg_km, pb_surface, teique_sf)
+
+# take a quick look at the data
+skimr::skim(ultra)
+```
+
+## Univariate and bivariate plots
+
+```{r}
+
+# plot pairs of variables (from `psych` package)
+pairs.panels(ultra[,c("sex","pb_surface","age","avg_km","pb_elev","teique_sf","steu_b","stem_b","pb100k_dec")], 
+             ellipses = F, density = F, hist.col = "deepskyblue")
+
+# alternative from car package
+scatterplotMatrix( ~ age + sex + pb_surface + avg_km + pb_elev + teique_sf + steu_b + stem_b + pb100k_dec, data = ultra, smooth = F)
+
+
+```
+
+## Residual Plots
+
+### Example
+
+```{r}
+# fit model with all variables
+ultrafit = lm(pb100k_dec ~ sex + age + pb_elev + avg_km + pb_surface + teique_sf,
+              data = ultra )
+
+# different types of residuals 
+# raw residuals
+raw_resid = residuals(ultrafit) # alternatively, ultrafit$residuals
+head(raw_resid)
+# standardized residuals
+stand_resid = rstandard(ultrafit)
+head(stand_resid)
+
+# jackknife (externally studentized residuals)
+jack_resid = rstudent(ultrafit)
+head(jack_resid)
+
+n = length(raw_resid)
+jack_resid_byhand = vector(length = n)
+stand_resid_byhand = vector(length = n)
+for(i in 1:n){
+  e_i = raw_resid[i] # residual from original model
+  s = summary(ultrafit)$sigma # rMSE from original model
+  hi = hatvalues(ultrafit)[i] # hat value from original model
+  r_i = e_i/(s*sqrt(1-hi)) # calculating standardized residual by hand
+  s_i = summary(lm(pb100k_dec ~ sex + age + pb_elev + avg_km + pb_surface + teique_sf,
+              data = ultra[-i,] ))$sigma # rMSE for model without ith observation
+  jack_resid_byhand[i] = r_i*(s/s_i) # jacknife residual by hand; equivalent to e_i/(s_i*sqrt(1-hi))
+  stand_resid_byhand[i] = r_i
+}
+# check that they match 
+#(there's rounding errors so if you check if they're exactly equal they won't be, but they're effectively equal)
+head(jack_resid, 3)
+head(jack_resid_byhand,3)
+
+head(stand_resid)
+head(stand_resid_byhand)
+
+# residual vs fitted values
+plot(ultrafit, which = 1)
+
+# residual qq plot
+plot(ultrafit, which = 2)
+# histogram of residuals
+hist(ultrafit$residuals)
+
+# partial regression/added variable plots
+# avPlots function from `car` package
+avPlots(ultrafit)
+
+# component plus residual plots
+crPlots(ultrafit)
+
+# regression output
+summary(ultrafit)
+
+
+```
+
+## Added Variable Plots
+
+Simulated examples
+
+Example 1: correlated variables and one unrelated
+
+```{r}
+# simulate variables
+# x1 and x2 correlated; x3 unrelated
+# y function of x2 directly; not x1 or x3
+x1 = runif(n=100, min = 10, max = 20)
+x2 = 2*x1 + rnorm(n=100, sd = 5)
+x3 = rnorm(n=100, mean = 5)
+y = -1 + x2 + rnorm(100, sd = 10) 
+
+simdf = data.frame(x1, x2, x3, y)
+
+# bivariate plots
+pairs.panels(simdf, ellipses = F, density = F, hist.col = "deepskyblue")
+
+# fit model
+simlm = lm(y ~ x1 + x2 + x3, data = simdf)
+
+# generate residuals for partial regression plots
+avx1 = lm(x1 ~ x2 + x3, data = simdf)$residuals
+avy1 = lm(y ~ x2 + x3, data = simdf)$residuals
+avx2 = lm(x2 ~ x1 + x3, data = simdf)$residuals
+avy2 = lm(y ~ x1 + x3, data = simdf)$residuals
+avx3 = lm(x3 ~ x1 + x2, data = simdf)$residuals
+avy3 = lm(y ~ x1 + x2, data = simdf)$residuals
+
+
+
+# added variable plot for X1
+p1 = data.frame(yresid = avy1, xresid = avx1) %>%
+  ggplot(aes(x = xresid, y = yresid)) + 
+  geom_point() + 
+  theme_bw() + 
+  labs(x = "Residuals (X1 | X2 + X3)", y = "Residuals (Y | X2 + X3)") + 
+  geom_smooth(method = "lm", se = F) +
+  ylim(-40, 30)
+
+# added variable plot for X2
+p2 = data.frame(yresid = avy2, xresid = avx2) %>%
+  ggplot(aes(x = xresid, y = yresid)) + 
+  geom_point() + 
+  theme_bw() + 
+  labs(x = "Residuals (X2 | X1 + X3)", y = "Residuals (Y | X1 + X3)") + 
+  geom_smooth(method = "lm", se = F) +
+  ylim(-40, 30)
+
+# added variable plot for X3
+p3 = data.frame(yresid = avy3, xresid = avx3) %>%
+  ggplot(aes(x = xresid, y = yresid)) + 
+  geom_point() + 
+  theme_bw() + 
+  labs(x = "Residuals (X3 | X1 + X2)", y = "Residuals (Y | X1 + X2)") + 
+  geom_smooth(method = "lm", se = F) +
+  ylim(-40, 30)
+
+gridExtra::grid.arrange(p1,p2,p3, nrow = 2)
+
+# check coefficients
+# x1
+summary(lm(avy1 ~ avx1))$coefficients[2,]
+# x2
+summary(lm(avy2 ~ avx2))$coefficients[2,]
+# x3
+summary(lm(avy3 ~ avx3))$coefficients[2,]
+# MLR model coefficients
+summary(simlm)$coefficients
+
+
+
+```
+
+Example 2: uncorrelated predictors
+
+```{r}
+# simulate variables
+# x1 and x2 uncorrelated
+# y function of x1 and x2
+x1 = runif(n=100, min = 10, max = 20)
+x2 = rnorm(n=100, mean = 10, sd = 3)
+y = -1 + 5*x1 + 2*x2 + rnorm(100, sd = 10) 
+
+simdf = data.frame(x1, x2, y)
+
+# bivariate plots
+pairs.panels(simdf, ellipses = F, density = F, hist.col = "seagreen3")
+
+# fit model
+simlm = lm(y ~ x1 + x2, data = simdf)
+
+# generate residuals for partial regression plots
+avx1 = lm(x1 ~ x2,  data = simdf)$residuals
+avy1 = lm(y ~ x2, data = simdf)$residuals
+avx2 = lm(x2 ~ x1, data = simdf)$residuals
+avy2 = lm(y ~ x1, data = simdf)$residuals
+
+
+
+# added variable plot for X1
+p1 = data.frame(yresid = avy1, xresid = avx1) %>%
+  ggplot(aes(x = xresid, y = yresid)) + 
+  geom_point() + 
+  theme_bw() + 
+  labs(x = "Residuals (X1 | X2 )", y = "Residuals (Y | X2 )") + 
+  geom_smooth(method = "lm", se = F, color = "forestgreen") +
+  ylim(-40, 35)
+
+# added variable plot for X2
+p2 = data.frame(yresid = avy2, xresid = avx2) %>%
+  ggplot(aes(x = xresid, y = yresid)) + 
+  geom_point() + 
+  theme_bw() + 
+  labs(x = "Residuals (X2 | X1 )", y = "Residuals (Y | X1)") + 
+  geom_smooth(method = "lm", se = F, color = "forestgreen") +
+  ylim(-40, 35)
+
+
+
+gridExtra::grid.arrange(p1,p2, nrow = 1)
+
+# check coefficients
+# x1
+summary(lm(avy1 ~ avx1))$coefficients[2,]
+# x2
+summary(lm(avy2 ~ avx2))$coefficients[2,]
+# MLR model
+summary(simlm)$coefficients
+
+```
+

@@ -1,0 +1,240 @@
+---
+title: "Module 2 Lecture Code: part III"
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+library(here)
+library(labelled)
+library(car)
+library(readxl)
+library(psych)
+library(MASS)
+
+# the here package helps keep your paths/files organized (but you don't have to if you don't want to)
+# I have an R project (.RProj) in my main folder for this class
+# I keep this lecture code file in a subfolder for Module 2 in another subfolder for Notes
+# you can delete this and just change the path names to read in the data later to your computer's path name if that's easier
+here::i_am("Notes/Module 2/M2_lecture2.Rmd")
+
+```
+# Data Management
+
+This is code from the previous lecture, since we're continuing with our ulrtra running example.
+ 
+```{r}
+# data dictionary misspecified sex coding (68% of sample was male)
+# if you don't want to use the here() function just use read_excel("path/on/your/computer") instead
+ultra_full = read_excel(here("Notes","Datasets","ultrarunning.xlsx")) %>% 
+  mutate(sex = factor(sex, levels = c(1,2), labels = c("Female","Male")),
+         pb_surface = factor(pb_surface, levels = c(1,2,3,4), labels = c("Trail","Track","Road","Mix")))
+
+ultra = ultra_full %>% drop_na(pb100k_dec,sex,age,pb_elev,avg_km, pb_surface, teique_sf)
+
+# fit model with all variables
+ultrafit = lm(pb100k_dec ~ sex + age + pb_elev + avg_km + pb_surface + teique_sf,
+              data = ultra )
+
+```
+
+# Lecture 2
+
+We will continue with the ultra-running example from above.
+
+## Leverage
+```{r}
+
+# hat values from model
+hatvalues(ultrafit)
+
+# alternative code
+influence(ultrafit)$hat
+
+# by hand to see that we can get the same thing using the model matrix
+X = model.matrix(ultrafit) # this grabs the model matrix easily (includign dummy variables)
+H = X %*% solve(t(X)%*%X) %*% t(X)
+diag(H)
+
+# plot each hat value by observation index (from `car` package)
+influenceIndexPlot(ultrafit, "hat", id = list(n=5))
+
+# it looks like many of these points have high leverage because they came from track races and one due to age
+avPlots(ultrafit, id=list(method=list(hatvalues(ultrafit)), n=5, cex=1, col=carPalette()[3], location="lr"))
+
+# grabbing just age plot for Top Hat question :)
+avPlot(ultrafit, variable = "age", id=F)
+
+# average hat value
+(length(ultrafit$coefficients))/nrow(ultrafit$model)
+
+# confirm
+mean(hatvalues(ultrafit))
+
+# 2(p+1)/n
+thresh2 = 2*(length(ultrafit$coefficients))/nrow(ultrafit$model)
+thresh2
+# 3(p+1)/n
+thresh3 = 3*(length(ultrafit$coefficients))/nrow(ultrafit$model)
+thresh3
+
+# points with leverage >3(p+1)/n
+which(hatvalues(ultrafit)>thresh3) %>% unname()
+```
+
+## Jackknife residuals
+
+```{r}
+
+# function to calculate jackknife residuals 
+# (called studentized in R)
+rstudent(ultrafit)
+
+# calculate by hand
+n = nrow(ultrafit$model)
+studres = vector(length = n)
+for(i in 1:n){
+  fit = lm(formula = pb100k_dec ~ sex + age + pb_elev + avg_km + pb_surface + 
+  teique_sf, data = ultrafit$model[-i,])
+  hii = hatvalues(ultrafit)[i]
+  s = summary(fit)$sigma
+  ri = ultrafit$residuals[i]
+  sri = ri/(s*sqrt(1-hii))
+  studres[i]=sri
+}
+studres
+
+# plot each residual by observation index (from `car` package)
+# car package refers to these as studentized residuals (leave-one-out residuals)
+influenceIndexPlot(ultrafit, "Studentized", id = list(n=7))
+
+# while these points all have high residuals, none look particularly unusual
+avPlots(ultrafit, id=list(method=list(rstudent(ultrafit)), n=5, cex=1, col=carPalette()[3], location="lr"))
+
+
+# show which studentized residuals are largest in absolute value (>2)
+which(abs(rstudent(ultrafit))>2)
+
+
+
+```
+
+## Cook's distance
+
+```{r}
+# function to calculate cook's distance
+cooks.distance(ultrafit)
+
+# plot cook's distance by index (observation number) using `car` package
+influenceIndexPlot(ultrafit, "Cook", id = list(n=5))
+
+
+# show which values are larger than 4/n
+which(cooks.distance(ultrafit)>4/nrow(ultrafit$model))
+
+# find points in added variables plots & component + residuals plots
+avPlots(ultrafit, id=list(method=list(cooks.distance(ultrafit)), n=9, cex=1, col=carPalette()[3], location="lr"))
+crPlots(ultrafit, id=list(method=list(cooks.distance(ultrafit)), n=9, cex=1, col=carPalette()[3], location="lr"))
+```
+
+## Identifying Problematic Points 
+
+
+```{r}
+# plot all three diagnostic metrics
+influenceIndexPlot(ultrafit, c("Cook","Studentized","hat"), id = list(n = 5))
+
+# plot leverage by residuals and data frame of identified problem points 
+influencePlot(ultrafit) # this also comes from the `car` package
+
+
+
+
+```
+
+
+## Sensitivity to Outliers/Influential points
+
+```{r}
+
+# find points with large cook's distance (>4/n) removed
+cook_thresh = 4/nrow(ultrafit$model)
+length(which(cooks.distance(ultrafit)>cook_thresh))
+
+
+# it looks like 158 and 169 only have high leverage because they are from track races; we'll try dropping the rest to check the sensitivity of the model
+problem_indices = c(37,47,61,99,102,157,180)
+
+# refit model with problematic points removed
+ultrafit2 <- lm(pb100k_dec ~ sex + age + pb_elev + avg_km + pb_surface + teique_sf,
+              data = ultra %>%
+                slice(-problem_indices))
+
+# show model output
+summary(ultrafit2)
+# compare to original model
+summary(ultrafit)
+
+```
+
+## Robust Regression
+
+```{r}
+# rlm() function is from the `MASS` package in R
+ultrafit_robust <- rlm(pb100k_dec ~ sex + age + pb_elev + avg_km + pb_surface + teique_sf, 
+                       data = ultra)
+# default for rlm() is huber with k = 1.345sigma
+
+# show model output
+summary(ultrafit_robust)
+# compare to original model
+summary(ultrafit)
+
+```
+```{r}
+# to change from huber to bisquare, you can change psi (the function of residuals that we minimize)
+# default for bisquare uses a constant of 4.685 (vs 1.345 in huber method)
+ultrafit_robust_bsq <- rlm(pb100k_dec ~ sex + age + pb_elev + avg_km + pb_surface + teique_sf, 
+                       data = ultra, psi = psi.bisquare)
+summary(ultrafit_robust_bsq)
+
+# want a p-value for these (careful--results are asymptotic)
+library(sfsmisc)
+
+# huber method
+# overall F test (all coefficients other than intercept)
+f.robftest(ultrafit_robust)
+# test for teique_sf
+f.robftest(ultrafit_robust, var = "teique_sf")
+
+# bisquare method
+# overall F test (all coefficients other than intercept)
+f.robftest(ultrafit_robust_bsq)
+# test for teique_sf
+f.robftest(ultrafit_robust_bsq, var = "teique_sf")
+
+```
+
+```{r}
+# slope in minutes
+ultrafit$coefficients[9]*60
+# confidence interval in minutes
+confint(ultrafit)[9,] * 60
+
+# I call the relationship week because the partial correlation (after adjusting for confounders) is only about 0.2
+yres = lm(pb100k_dec ~ sex + age + pb_elev + avg_km + pb_surface, data = ultra)$residuals
+xres = lm(teique_sf ~ sex + age + pb_elev + avg_km + pb_surface, data = ultra)$residuals
+
+lm(yres ~ xres) %>% summary()
+cor(yres, xres)
+```

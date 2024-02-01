@@ -1,0 +1,177 @@
+---
+title: "M2 Lab"
+author: "YOUR NAME HERE"
+date: "Spring 2024"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+require(knitr)
+# this line of code is added so that the file can be knitted even when error messages are produced by your code
+knitr::opts_chunk$set(error = T)
+```
+
+```{r, message=FALSE}
+
+library(tidyverse) # for data manipulation
+library(psych) # for pairiwse scatter plot function (not necessary but in case you want to use that function from the lecture code)
+library(car) # for extra model diagnostics like plots and vif() function
+library(MASS) # for rlm() function (robust regression)
+
+```
+
+
+# Data Management
+
+The following data come from a study of the impacts of toluene exposure through inhalation on toluene concentration in the blood. In the study, 60 rats were exposed to differing levels of toluene inhalation, from 11.34 to 1744.7 parts per million (ppm) (newppm) for a duration of 3 hours. Blood levels were measured (bloodtol) following exposure measured in mg/L. Other variables measured were weight in grams (weight), age in days (age), and snout size as either short (snoutsize=1) or long (snoutsize=2).
+
+We will use these data to model the relationship between toluene exposure and blood concentration, possibly adjusting for other variables.
+
+
+```{r}
+# read in data (csv file)
+
+
+
+```
+
+
+# Part 1) Visualize data
+
+__Calculate some descriptive statistics and display some plots to learn about the data.__ (You don't have to do extensive summaries/plots, but get a sense of the types of variables, any missingness, distribution of certain variables that could be important in the regression models, and relationships between variables). You should create a factor variable for snout size.
+
+```{r}
+
+
+
+```
+
+Comment on any potential problems or trends that you see:
+
+
+
+# Part 2) SLR
+
+__Fit a regression model for blood toluene (bloodtol) that contains only toluene exposure (newppm) as a predictor and perform a graphical analysis to assess the linearity, equal variance, and normality assumptions of linear regression. Interpret the plots and evaluate if you believe the assumptions are met.__
+
+```{r}
+# fit slr model
+
+
+# plot residual vs fitted and residual qq-plot
+# hint: if you've saved your model above you can use the plot() function and specify which = 1:2 to tell R to only print the first 2 plots
+
+```
+
+Interpretation of plots/evaluation of assumptions:
+
+# Part 3) MLR
+
+__We will now add the other covariates to the model. Assess which variables appear to be important and explicitly test if there is effect modification (interaction) of toluene exposure by weight, age, or snout size.__
+
+```{r}
+
+# model with interactions included
+
+# test if the interactions are useful (you can just tun one test to test them all at once)
+
+```
+
+Comment on important variables and if interactions seem necessary:
+
+# Part 4) Collinearity
+
+__Check for collinearity between the 4 covariates (exposure, age, weight, snout size). Are you concerned that collinearity could be affecting our statistical inference in these data?__
+
+```{r}
+# measure of collinearity in the model involving exposure, weight, age, and snout size
+
+```
+
+Interpretation:
+
+
+# Part 5) Choose a Model
+
+__Based on your analysis so far, choose the model that you believe is the best. Use this as your final model. Justify why you chose this model and comment on any potential assumption violations in this model (a few residual plots may be helpful for this).__
+
+```{r}
+
+
+
+```
+
+
+Which model did you choose? Why? Are you worried about any assumptions
+
+# Part 6) Identifying Influential or Outlier Points
+
+__Based on the model you chose in part 5, identify poorly fit, high leverage points, and/or influential points in your model. Comment on how you identified these particular points (based on which metric(s)?).__ 
+
+
+```{r}
+
+# the influence index plotting functions from the `car` (such as influenceIndexPlot()) may be useful to spot these points
+
+```
+
+
+Points identified and why: 
+
+
+# Part 7) Sensitivity to Outliers/Influential Points
+
+__Perform a sensitivity analysis by refitting the model excluding the troublesome points in part 6.  Is your model sensitive to these points?__
+ 
+```{r}
+# fit model removing outlier/influential points
+# you can create a new data frame with the points remove or input the filtering in the lm() function
+# for examplem if I wanted to remove the second and tenth rows I could run: lm(y ~ x1 + x2, data = mydata %>% slice(-c(2,10))) 
+# the slice() function grabs or removes (if included with a `-` sign) rows by their index
+
+# compare the two models
+
+ 
+```
+ 
+
+
+# Part 8)	Robust Regression
+
+__Fit a robust regression using the model you chose in part 5 and compare the two models. Comment on the differences.  Do you think the robust model is more appropriate here?__
+
+```{r}
+# fit robust regression model (rlm() funciton from `MASS` package)
+
+```
+
+
+
+# Part 9) Data Transformations
+
+__Based on what you saw in your descriptives from part 1 and the residual plots from your final model would a data transformation be appropriate?  If so which one?  (no need to transform, just comment).__
+
+
+
+
+
+# Part 10) Summary
+
+__Summarize your findings from parts 1-9 (model chosen, trends found using said model, possible multicollinearity, sensitivity to outliers/influential points, etc.)__
+
+
+
+
+
+
+
+```{r}
+
+sessionInfo()
+
+```
