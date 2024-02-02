@@ -1,0 +1,346 @@
+---
+title: "M2 Lab"
+author: "Matthew Præstgaard"
+date: "Spring 2024"
+output:
+  rmdformats::downcute:
+    self_contained: true
+    default_style: "dark"
+    downcute_theme: "default"
+    code_folding: "show"
+  svglite:
+    fig.retina: 2
+---
+
+## Libraries and Functions
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+require(knitr)
+knitr::opts_chunk$set(error = T)
+```
+
+```{r, message=FALSE}
+
+library(tidyverse) # for data manipulation
+library(psych) # for pairiwse scatter plot function (not necessary but in case you want to use that function from the lecture code)
+library(car) # for extra model diagnostics like plots and vif() function
+library(MASS) # for rlm() function (robust regression)
+library(plotly)
+library(ggthemr)
+    ggthemr("flat dark")
+library(gridExtra)
+library(ggh4x)
+library(kableExtra)
+library(jtools)
+```
+
+```{r}
+# Function to summarize variables with optional grouping
+# Usage: summarize.var(dataset, var, group_var (optional))
+summarize.var <- function(dataset, var, group_var = NULL) {
+
+  require(tidyverse)
+  require(rlang)
+
+  result <- dataset %>%
+    {if (!is.null(group_var)) dplyr::group_by({{ group_var }}) else .} %>%
+    summarise(
+      mean = mean({{ var }}, na.rm = TRUE),
+      median = median({{ var }}, na.rm = TRUE),
+      min = min({{ var }}, na.rm = TRUE),
+      max = max({{ var }}, na.rm = TRUE),
+      q25 = quantile({{ var }}, 0.25, na.rm = TRUE), # first quartile
+      q75 = quantile({{ var }}, 0.75, na.rm = TRUE), # third quartile
+      sd = sd({{ var }}, na.rm = TRUE),
+      n = length(na.omit({{ var }}))
+    ) %>%
+    mutate(IQR = q75 - q25)
+
+  return(result)
+}
+```
+
+```{r}
+library(ggplot2)
+
+ggResid <- function(fit) {
+  # Extract fitted values and residuals from the linear model
+  fitted_values <- fit$fitted.values
+  residuals <- fit$residuals
+  
+  # Create a data frame for the residuals vs. fitted values plot
+  resid_data <- data.frame(Fitted = fitted_values, Residuals = residuals)
+  
+  # Create the plot
+  ggplot(resid_data, aes(x = Fitted, y = Residuals)) +
+    geom_point() +
+    geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+    labs(
+      title = "Residuals vs. Fitted Values",
+      x = "Fitted Values",
+      y = "Residuals"
+    )
+}
+
+# Example usage:
+# fit <- lm(mpg ~ disp + hp, data = mtcars)
+# ggResid(fit)
+
+```
+
+```{r}
+# plotlyRegression: Scatterplot with line, SE, and summary statistics
+# requires a model to have been created beforehand
+# Usage: plotlyRegression(fit, title = "title" (optional))
+plotlyRegression <- function(fit, title = "title") {
+  require(plotly)
+
+  # Extract model data
+  df <- fit$model
+  x_var <- names(df)[2]
+  y_var <- names(df)[1]
+
+  # Create a scatter plot
+  p <- plot_ly(df, x = ~ df[[x_var]], y = ~ df[[y_var]], type = "scatter", mode = "markers")
+
+  # Get confidence interval data
+  confint_df <- data.frame(predict(fit, interval = "confidence"))
+  confint_df[[x_var]] <- df[[x_var]] # Adding the x variable to the dataframe
+
+  # Add linear regression line and 95% confidence interval
+  p <- p %>%
+    add_lines(
+      x = confint_df[[x_var]],
+      y = confint_df$fit,
+      line = list(color = "blue")
+    ) %>%
+    add_ribbons(
+      x = confint_df[[x_var]],
+      ymin = confint_df$lwr,
+      ymax = confint_df$upr,
+      line = list(color = "transparent"),
+      fillcolor = "rgba(0, 100, 255, 0.2)"
+    )
+
+  # Create subtitle with summary statistics
+  subtitle <- paste(
+    "Adj R2 =", signif(summary(fit)$adj.r.squared, 5),
+    ", Intercept =", signif(fit$coef[[1]], 5),
+    ", Slope =", signif(fit$coef[[2]], 5),
+    ", P =", signif(summary(fit)$coef[2, 4], 5)
+  )
+
+  # Add layout with combined title and subtitle
+  p <- p %>%
+    layout(
+      title = list(
+        text = paste0(title, "<br><sup>", subtitle, "</sup>"),
+        font = list(size = 16)
+      ),
+      plot_bgcolor = "#2c2c2c",
+      paper_bgcolor = "#2c2c2c",
+      font = list(color = "#ffffff"),
+      xaxis = list(title = x_var, color = "#ffffff"),
+      yaxis = list(title = y_var, color = "#ffffff")
+    )
+
+  return(p)
+}
+```
+
+```{r}
+qqTest <- function(data, sample, title = "title", facet_var = NULL) {
+    require(tidyverse)
+
+    gg <- ggplot(data,
+        aes(sample = {{ sample }})) +
+        stat_qq() +
+        stat_qq_line(
+            size = 0.8,
+        ) +
+        labs(
+            title = title,
+            x = "Theoretical Quantiles",
+            y = "Sample Quantiles"
+        ) +
+        guides(color = "none")
+
+    if (!is.null(facet_var)) {
+
+        # Extract colors from facet_var variable
+        colors <- pull(data, {{ facet_var }})
+
+        gg <- gg + aes(color = factor(colors)) + facet_wrap(as.formula(paste("~", facet_var)))
+    }
+
+    return(gg)
+}
+
+```
+
+```{r}
+#simple violin plot function
+#usage: ggViolin(data, y, fill, "title" (optional))
+ggViolin <- function(data, y, fill, title = "title") {
+    require(tidyverse)
+
+    ggplot(data, aes(x = {{ fill }}, y = {{ y }}, fill = {{ fill }})) +
+        geom_violin() +
+        labs(title = title)
+}
+```
+
+# Data Management
+
+The following data come from a study of the impacts of toluene exposure through inhalation on toluene concentration in the blood. In the study, 60 rats were exposed to differing levels of toluene inhalation, from 11.34 to 1744.7 parts per million (ppm) (newppm) for a duration of 3 hours. Blood levels were measured (bloodtol) following exposure measured in mg/L. Other variables measured were weight in grams (weight), age in days (age), and snout size as either short (snoutsize=1) or long (snoutsize=2).
+
+We will use these data to model the relationship between toluene exposure and blood concentration, possibly adjusting for other variables.
+
+
+```{r}
+setwd("Lab2")
+
+#reading data and making factor variable for snout size
+data <- read_csv("hwdata2.csv") %>%
+    mutate(snout_f = factor(snoutsize - 1,
+        levels = c(0, 1),
+        labels = c("short", "long")))
+
+
+```
+
+
+# Part 1) Visualize data
+
+__Calculate some descriptive statistics and display some plots to learn about the data.__ (You don't have to do extensive summaries/plots, but get a sense of the types of variables, any missingness, distribution of certain variables that could be important in the regression models, and relationships between variables). You should create a factor variable for snout size.
+
+```{r}
+
+ggViolin(data, weight, snout_f) %>% ggplotly()
+
+```
+
+Comment on any potential problems or trends that you see:
+
+
+
+# Part 2) SLR
+
+__Fit a regression model for blood toluene (bloodtol) that contains only toluene exposure (newppm) as a predictor and perform a graphical analysis to assess the linearity, equal variance, and normality assumptions of linear regression. Interpret the plots and evaluate if you believe the assumptions are met.__
+
+```{r}
+# fit slr model
+
+
+# plot residual vs fitted and residual qq-plot
+# hint: if you've saved your model above you can use the plot() function and specify which = 1:2 to tell R to only print the first 2 plots
+
+```
+
+Interpretation of plots/evaluation of assumptions:
+
+# Part 3) MLR
+
+__We will now add the other covariates to the model. Assess which variables appear to be important and explicitly test if there is effect modification (interaction) of toluene exposure by weight, age, or snout size.__
+
+```{r}
+
+# model with interactions included
+
+# test if the interactions are useful (you can just tun one test to test them all at once)
+
+```
+
+Comment on important variables and if interactions seem necessary:
+
+# Part 4) Collinearity
+
+__Check for collinearity between the 4 covariates (exposure, age, weight, snout size). Are you concerned that collinearity could be affecting our statistical inference in these data?__
+
+```{r}
+# measure of collinearity in the model involving exposure, weight, age, and snout size
+
+```
+
+Interpretation:
+
+
+# Part 5) Choose a Model
+
+__Based on your analysis so far, choose the model that you believe is the best. Use this as your final model. Justify why you chose this model and comment on any potential assumption violations in this model (a few residual plots may be helpful for this).__
+
+```{r}
+
+
+
+```
+
+
+Which model did you choose? Why? Are you worried about any assumptions
+
+# Part 6) Identifying Influential or Outlier Points
+
+__Based on the model you chose in part 5, identify poorly fit, high leverage points, and/or influential points in your model. Comment on how you identified these particular points (based on which metric(s)?).__ 
+
+
+```{r}
+
+# the influence index plotting functions from the `car` (such as influenceIndexPlot()) may be useful to spot these points
+
+```
+
+
+Points identified and why: 
+
+
+# Part 7) Sensitivity to Outliers/Influential Points
+
+__Perform a sensitivity analysis by refitting the model excluding the troublesome points in part 6.  Is your model sensitive to these points?__
+ 
+```{r}
+# fit model removing outlier/influential points
+# you can create a new data frame with the points remove or input the filtering in the lm() function
+# for examplem if I wanted to remove the second and tenth rows I could run: lm(y ~ x1 + x2, data = mydata %>% slice(-c(2,10))) 
+# the slice() function grabs or removes (if included with a `-` sign) rows by their index
+
+# compare the two models
+
+ 
+```
+ 
+
+
+# Part 8)	Robust Regression
+
+__Fit a robust regression using the model you chose in part 5 and compare the two models. Comment on the differences.  Do you think the robust model is more appropriate here?__
+
+```{r}
+# fit robust regression model (rlm() funciton from `MASS` package)
+
+```
+
+
+
+# Part 9) Data Transformations
+
+__Based on what you saw in your descriptives from part 1 and the residual plots from your final model would a data transformation be appropriate?  If so which one?  (no need to transform, just comment).__
+
+
+
+
+
+# Part 10) Summary
+
+__Summarize your findings from parts 1-9 (model chosen, trends found using said model, possible multicollinearity, sensitivity to outliers/influential points, etc.)__
+
+
+
+
+
+
+
+```{r}
+
+sessionInfo()
+
+```
