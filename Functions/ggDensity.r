@@ -1,7 +1,7 @@
 #density plots with optional grouping variable
 #can be faceted or together by specifying either group or color
 #usage: density.dodge(data, sample, group = "group" (optional), color = "NULL" (optional), title = "title" (optional) )
-gg.density <- function(data, sample, group = NULL, color = NULL, title = "Insert Title") {
+ggDensity <- function(data, sample, group = NULL, color = NULL, title = "Insert Title") {
 
   require(ggplot2)
 

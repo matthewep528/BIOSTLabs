@@ -1,6 +1,6 @@
 # ggplot histogram function with optional faceting variable
 # Usage: gg.hist(data, x, bins (optional), title (optional), data$group (optional))
-gg.hist <- function(data, x, bins = 20, title = "Insert Title", x_lab = "x", group = NULL) {
+gghist <- function(data, x, bins = 20, title = "Insert Title", x_lab = "x", group = NULL) {
   require(ggplot2)
   require(ggh4x)
 

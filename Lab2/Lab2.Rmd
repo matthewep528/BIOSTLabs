@@ -202,9 +202,11 @@ setwd("Lab2")
 
 #reading data and making factor variable for snout size
 data <- read_csv("hwdata2.csv") %>%
-    mutate(snout_f = factor(snoutsize - 1,
+    mutate(
+      snout_f = factor(snoutsize - 1,
         levels = c(0, 1),
-        labels = c("short", "long")))
+        labels = c("short", "long")),
+      snoutsize = as.factor(snoutsize))
 
 
 ```
@@ -212,11 +214,21 @@ data <- read_csv("hwdata2.csv") %>%
 
 # Part 1) Visualize data
 
-__Calculate some descriptive statistics and display some plots to learn about the data.__ (You don't have to do extensive summaries/plots, but get a sense of the types of variables, any missingness, distribution of certain variables that could be important in the regression models, and relationships between variables). You should create a factor variable for snout size.
+__Calculate some descriptive statistics and display some plots to learn about the data.__ 
+(You don't have to do extensive summaries/plots, but get a sense of the types of variables, any missingness, distribution of certain variables
+that could be important in the regression models, and relationships between variables). You should create a factor variable for snout size.
 
 ```{r}
 
-ggViolin(data, weight, snout_f) %>% ggplotly()
+weightplot <- ggDensity(data, weight, color = "snout_f", title = "1a. Weight")
+ageplot <- ggDensity(data, age, color = "snout_f", title = "1b. Age")
+bloodplot <- ggDensity(data, bloodtol, color = "snout_f", title = "1c. Blood Toluene (mg/L)")
+newppmplot <- ggDensity(data, newppm, color = "snout_f", title = "1d. Toluene Exposure (ppm)")
+grid.arrange(
+  weightplot, ageplot, bloodplot, newppmplot,
+  nrow = 2, ncol = 2,
+  top = "Figure 1. Density Plots of Continuous Variables by Snout Size"
+)
 
 ```
 
