@@ -32,18 +32,21 @@ library(gridExtra)
 library(ggh4x)
 library(kableExtra)
 library(jtools)
+library(rlang)
+library(here)
+# I'm not 100% sure how many of these I actually need, but I'll burn that bridge when I get there
 ```
 
 ```{r}
 # Function to summarize variables with optional grouping
 # Usage: summarize.var(dataset, var, group_var (optional))
-summarize.var <- function(dataset, var, group_var = NULL) {
+summarize.var <- function(dataset, var, group_var) {
 
   require(tidyverse)
   require(rlang)
 
   result <- dataset %>%
-    {if (!is.null(group_var)) dplyr::group_by({{ group_var }}) else .} %>%
+    group_by({{ group_var }}) %>%
     summarise(
       mean = mean({{ var }}, na.rm = TRUE),
       median = median({{ var }}, na.rm = TRUE),
@@ -190,6 +193,45 @@ ggViolin <- function(data, y, fill, title = "title") {
 }
 ```
 
+```{r}
+#density plots with optional grouping variable
+#can be faceted or together by specifying either group or color
+#usage: density.dodge(data, sample, group = "group" (optional), color = "NULL" (optional), title = "title" (optional) )
+ggDensity <- function(data, sample, group = NULL, color = NULL, title = "Insert Title") {
+
+  require(ggplot2)
+
+  plot <- ggplot(data, aes(x = {{ sample }})) +
+    geom_density() +
+    labs(
+      title = title,
+      y = "Frequency",
+      color = NULL
+    )
+
+  if (!is.null(group)) {
+
+    colors <- pull(data, {{ group }})
+
+    plot <- plot + aes(color = factor(colors)) +
+      facet_wrap(as.formula(paste("~", group))) +
+      labs(color = "Group")
+  }
+
+  if (!is.null(color)) {
+
+    colors <- pull(data, {{ color }})
+
+    plot <- plot + aes(fill = factor(colors), color = factor(colors), alpha = 0.02) +
+      labs(fill = "Group") +
+      geom_density(size = 1) +
+      guides(color = "none", alpha = "none")
+  }
+
+  return(plot)
+}
+```
+
 # Data Management
 
 The following data come from a study of the impacts of toluene exposure through inhalation on toluene concentration in the blood. In the study, 60 rats were exposed to differing levels of toluene inhalation, from 11.34 to 1744.7 parts per million (ppm) (newppm) for a duration of 3 hours. Blood levels were measured (bloodtol) following exposure measured in mg/L. Other variables measured were weight in grams (weight), age in days (age), and snout size as either short (snoutsize=1) or long (snoutsize=2).
@@ -197,7 +239,7 @@ The following data come from a study of the impacts of toluene exposure through 
 We will use these data to model the relationship between toluene exposure and blood concentration, possibly adjusting for other variables.
 
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 setwd("Lab2")
 
 #reading data and making factor variable for snout size
@@ -219,6 +261,14 @@ __Calculate some descriptive statistics and display some plots to learn about th
 that could be important in the regression models, and relationships between variables). You should create a factor variable for snout size.
 
 ```{r}
+weightStats <- summarize.var(data, weight, snout_f) %>%
+  mutate_if(is.numeric, round, digits = 2)
+ageStats <- summarize.var(data, age, snout_f) %>%
+  mutate_if(is.numeric, round, digits = 2)
+bloodStats <- summarize.var(data, bloodtol, snout_f) %>%
+  mutate_if(is.numeric, round, digits = 2)
+ppmStats <- summarize.var(data, newppm, snout_f) %>%
+  mutate_if(is.numeric, round, digits = 2)
 
 weightplot <- ggDensity(data, weight, color = "snout_f", title = "1a. Weight")
 ageplot <- ggDensity(data, age, color = "snout_f", title = "1b. Age")
@@ -229,7 +279,16 @@ grid.arrange(
   nrow = 2, ncol = 2,
   top = "Figure 1. Density Plots of Continuous Variables by Snout Size"
 )
+ggpubr::ggdensity(data, x = "weight", add = "mean", rug = TRUE, color = "snout_f", fill = "snout_f") %>% ggplotly()
 
+grid.arrange(
+  tableGrob(weightStats),
+  tableGrob(ageStats),
+  tableGrob(bloodStats),
+  tableGrob(ppmStats),
+  nrow = 4, ncol = 1,
+  top = "Summary Statistics of Weight, Age, Blood Toluene, and Toluene Exposure (respectively) by Snout Size"
+)
 ```
 
 Comment on any potential problems or trends that you see:

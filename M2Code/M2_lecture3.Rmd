@@ -1,0 +1,233 @@
+---
+title: "Module 2 Lecture Code: part III"
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, message=FALSE}
+library(tidyverse)
+library(here)
+library(car)
+library(readxl)
+library(psych)
+library(MASS)
+
+# the here package helps keep your paths/files organized (but you don't have to if you don't want to)
+# I have an R project (.RProj) in my main folder for this class
+# I keep this lecture code file in a subfolder for Module 2 in another subfolder for Notes
+# you can delete this and just change the path names to read in the data later to your computer's path name if that's easier
+here::i_am("Notes/Module 2/M2_lecture3.Rmd")
+
+```
+
+# Lecture 3
+
+
+
+## Data management
+```{r}
+# I'm using the `here` package again but you can change this to file paths that work on your computer instead if you don't want to use this syntax
+
+# load HERS data
+hers = read_excel(here("Notes", "Datasets","hersdata.xls"))
+# load UN data 
+load(here("Notes","Datasets","unhdd2020.rmph.rData"), verbose = T)
+# load body fat percentage data
+bfp = read.csv(here("Notes","Datasets","Module2-bodyfat.csv"))
+
+
+```
+
+## Transformations
+
+Here we are using the HERS cohort (Heart and Estrogen/Progestin Replacement Study)
+
+
+```{r}
+# plot marginal distribution of HDL
+p1 = hers %>%
+  ggplot(aes(x=HDL))+
+  geom_histogram(color = "black", fill = "skyblue") + 
+  theme_bw()
+
+# plot log-transormed HDL
+p2 = hers %>%
+  ggplot(aes(x=log(HDL)))+
+  geom_histogram(color = "black", fill = "skyblue4") + 
+  theme_bw()
+
+# print two plots next to each other
+gridExtra::grid.arrange(p1, p2, nrow = 1)
+
+pairs.panels(hers[,c("LDL","BMI","age")], ellipses = F, hist.col = "skyblue", density = F)
+
+# fit MLR model with raw HDL as output
+hers_fit = lm(HDL ~ BMI + age + smoking , data = hers)
+# component plus residuals plots
+crPlots(hers_fit)
+# fitted vs residuals and qqplot
+plot(hers_fit, which = 1:2)
+
+# fit MLR model with log-transformed HDL as output
+log_hers_fit = lm(log(HDL) ~ BMI + age + smoking , data = hers)
+# component plus residuals plots
+crPlots(log_hers_fit)
+# fitted vs residuals and qqplot
+plot(log_hers_fit, which = 1:2)
+
+# print model output
+summary(log_hers_fit)
+```
+
+The log transform seemed to stabilize the variance and made the distribution of the residuals more normal.
+
+## Polynomial Terms
+
+```{r}
+
+# mortality and education example
+unhdd %>%
+  ggplot(aes(y = mort_adult_f, x = educ_f)) + 
+  geom_point() + 
+  theme_bw() + 
+  labs(y = "Adult Female Mortality per 1000", x = "% Adult Female Population \nwith Secondary Education") +
+  geom_smooth(method = "lm", se = F, linetype = 2, color = "red3")
+
+
+
+# fit line
+linfit = lm(mort_adult_f ~ educ_f, data = unhdd)
+# fit quadratic
+quadfit = lm(mort_adult_f ~ educ_f+ I(educ_f^2), data = unhdd)
+# fit cubic
+cubfit = lm(mort_adult_f ~ educ_f + I(educ_f^2) + I(educ_f^3), data = unhdd)
+
+# residual plots
+plot(linfit, which = 1)
+plot(quadfit, which = 1)
+plot(cubfit, which = 1)
+
+# nested models tests (added variables tests)
+anova(linfit, quadfit)
+anova(quadfit, cubfit)
+
+# summary of model using quadratic term 
+summary(quadfit)
+
+# plot linear and quadratic model fit
+quadfit$model%>% 
+  mutate(quadratic = predict(quadfit),
+         cubic = predict(cubfit)) %>%
+  ggplot(aes(x = educ_f, y = mort_adult_f)) +
+    geom_point() + 
+    theme_bw() + 
+    geom_smooth(method = "lm", se = F, linetype = 2, color = "red3") + 
+    geom_line(aes(y = quadratic), color = "blue", linewidth = .5) +
+    geom_line(aes(y = cubic), color = "darkorange", linewidth = .5) +
+    labs(y = "Adult Female Mortality per 1000", 
+       x = "% Adult Female Population \nwith Secondary Education") 
+  
+
+```
+
+## Collinearity
+
+```{r}
+# plot data to show correlation between x and x^2
+unhdd %>% 
+  ggplot(aes(x = educ_f, y = I(educ_f^2))) + 
+  geom_point() + 
+  theme_bw() +
+  labs(x="% Adult Female Secondary Education", 
+       y = bquote('(% Adult Female Secondary Education)'^2)) +
+  geom_smooth(method = "lm", se = F)
+
+  
+# Variance Inflation Factor
+vif(quadfit)
+
+# calculate vif by hand
+corfit = lm(I(educ_f^2) ~ educ_f , data = unhdd, subset = !is.na(mort_adult_f)) 
+r2 = summary(corfit)$r.squared
+1/(1-r2)
+
+
+
+# center
+unhdd = unhdd %>%
+  mutate(educ_fc = educ_f - mean(educ_f, na.rm = T))
+
+# plot to show reduced correlation
+unhdd %>% 
+  ggplot(aes(x = educ_fc, y = I(educ_fc^2))) + 
+  geom_point() + 
+  theme_bw() +
+  labs(x="Centered Education", 
+       y = bquote('(Centered Education)'^2)) +
+  geom_smooth(method = "lm", se = F)
+
+# refit model with centered variables
+quadfitc = lm(mort_adult_f ~ educ_fc + I(educ_fc^2), data = unhdd)
+
+# new vifs
+vif(quadfitc)
+
+corfitc = lm(I(educ_fc^2) ~ educ_fc , data = unhdd, subset = !is.na(mort_adult_f)) 
+r2c = summary(corfitc)$r.squared
+1/(1-r2c)
+# compare output
+summary(quadfitc)
+
+
+
+```
+
+## Generalized VIF
+
+```{r}
+# model including hdi group (categorical variable)
+quadfitc_cat <- lm(mort_adult_f ~ educ_fc + I(educ_fc^2) + hdi_group,
+                   data = unhdd)
+
+# GVIFs
+vif(quadfitc_cat)
+
+```
+
+
+### Example: Body Fat Percentage 
+
+```{r}
+
+# scatter plot graphing using psych package
+pairs.panels(bfp, ellipses = F, hist.col = "skyblue")
+
+# fit model with all three measurements
+bf_fit1 = lm(bodyfat ~ triceps + thigh + midarm, data = bfp)
+summary(bf_fit1)
+
+# VIF values
+vif(bf_fit1)
+
+# remove thigh measurement
+bf_fit2 = lm(bodyfat ~ triceps + midarm, data = bfp)
+summary(bf_fit2)
+
+# new VIFs after dropping thigh from the model
+vif(bf_fit2)
+
+```
+
+
+
+

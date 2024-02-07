@@ -1,0 +1,318 @@
+---
+title: 'Module 2 Lecture Code: part IV'
+author: "Haley Grant"
+date: "2024-01-28"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE}
+library(tidyverse)
+library(here)
+library(car)
+library(readxl)
+library(psych)
+library(MASS)
+
+# the here package helps keep your paths/files organized (but you don't have to if you don't want to)
+# I have an R project (.RProj) in my main folder for this class
+# I keep this lecture code file in a subfolder for Module 2 in another subfolder for Notes
+# you can delete this and just change the path names to read in the data later to your computer's path name if that's easier
+here::i_am("Notes/Module 2/M2_lecture4_complete.Rmd")
+
+```
+
+# Common Questions
+
+## Data Management
+
+```{r}
+
+# real data
+bfp = read.csv(here("Notes","Datasets","Module2-bodyfat.csv"))
+
+```
+
+
+```{r}
+
+pairs.panels(bfp, ellipses = F, hist.col = "skyblue")
+
+bfp %>%
+  ggplot(aes(x = thigh, y = bodyfat, color = triceps)) + 
+  theme_bw() + 
+  geom_point() +
+  scale_color_viridis_c() 
+
+# simulated data based on observed data
+set.seed(123)
+tri.fit = lm(triceps ~ thigh, data = bfp)
+mse = summary(tri.fit)$sigma
+full.fit = lm(bodyfat ~ thigh + triceps, data = bfp)
+mse.full = summary(full.fit)$sigma
+thigh.sim = runif(n = 200, min = min(bfp$thigh), max = max(bfp$thigh))
+tri.sim.mean = as.vector(matrix(c(rep(1,200),thigh.sim), nrow= 200) %*% tri.fit$coefficients)
+tri.sim = tri.sim.mean + rnorm(n = 200, sd = mse)  
+bodyfat.sim.mean =  as.vector(matrix(c(rep(1,200),thigh.sim, tri.sim), nrow= 200) %*% full.fit$coefficients)
+bodyfat.sim = bodyfat.sim.mean + rnorm(n = 200, sd = mse.full)   
+ 
+sim.data = data.frame(thigh = thigh.sim, triceps = tri.sim, bodyfat = bodyfat.sim)
+
+# plot
+sim.data %>%
+  ggplot(aes(x = thigh, y = bodyfat, color = triceps)) + 
+  theme_bw() + 
+  geom_point() + 
+  labs(title = "Simulated Data", subtitle = "Based on Observed Correlation") +
+  scale_color_viridis_c() 
+
+sim.data %>%
+  ggplot(aes(x = thigh, y =triceps, color = triceps)) + 
+  theme_bw() + 
+  geom_point() + 
+  labs(title = "Simulated Data", subtitle = "Based on Observed Correlation") +
+  scale_color_viridis_c() 
+
+# pairwise correlation
+pairs.panels(sim.data, ellipses = F, hist.col = "skyblue")
+simfit1 = lm(bodyfat ~ thigh + triceps, data = sim.data)
+
+# Added variable plots
+xres1 = lm(thigh ~ triceps, data = sim.data)$residuals 
+yres1 = lm(bodyfat ~ triceps, data = sim.data)$residuals
+xres2 = lm(triceps ~ thigh, data = sim.data)$residuals 
+yres2 = lm(bodyfat ~ thigh, data = sim.data)$residuals
+
+av.data = data.frame(x_axis = c(xres1, xres2), 
+                     y_axis = c(yres1, yres2), 
+                     variable = rep(c("Triceps", "Thigh"), each = 200))
+
+av.data %>%
+  ggplot(aes(x = x_axis, y = y_axis)) + 
+  geom_point() + 
+  theme_bw() + 
+  facet_wrap(.~variable) + 
+  labs(x = "Residuals (X | other)", y = "Residuals (Y | other)") + 
+  geom_smooth(method = "lm")
+
+# simulated data with perfect correlation between thigh and triceps
+sim.data2 = data.frame(thigh = thigh.sim, triceps = tri.sim.mean, bodyfat = bodyfat.sim)
+# plot
+sim.data2 %>%
+  ggplot(aes(x = thigh, y = bodyfat, color = triceps)) + 
+  theme_bw() + 
+  geom_point() + 
+  labs(title = "Simulated Data", subtitle = "Perfect Correlation between Thigh and Triceps") +
+  scale_color_viridis_c() 
+
+sim.data2 %>%
+  ggplot(aes(x = thigh, y = triceps, color = triceps)) + 
+  theme_bw() + 
+  geom_point() + 
+  labs(title = "Simulated Data", subtitle = "Perfect Correlation between Thigh and Triceps") +
+  scale_color_viridis_c() 
+
+# pairwise correlation
+pairs.panels(sim.data2, ellipses = F, hist.col = "skyblue")
+simfit2 = lm(bodyfat ~ thigh + triceps, data = sim.data2)
+
+# Added variables plots
+
+# second set of simulated data (perfect correlation)
+xres1 = lm(thigh ~ triceps, data = sim.data2)$residuals %>% round(digits = 5)
+yres1 = lm(bodyfat ~ triceps, data = sim.data2)$residuals
+xres2 = lm(triceps ~ thigh, data = sim.data2)$residuals %>% round(digits = 5)
+yres2 = lm(bodyfat ~ thigh, data = sim.data2)$residuals
+
+av.data = data.frame(x_axis = c(xres1, xres2), 
+                     y_axis = c(yres1, yres2), 
+                     variable = rep(c("Triceps", "Thigh"), each = 200))
+
+av.data %>%
+  ggplot(aes(x = x_axis, y = y_axis)) + 
+  geom_point() + 
+  theme_bw() + 
+  facet_wrap(.~variable) + 
+  labs(x = "Residuals (X | other)", y = "Residuals (Y | other)")
+
+
+```
+
+
+# Cancer Immunotherapy Response
+
+## Data management
+
+```{r}
+
+crc = read_csv(here("Notes","Datasets","crc_mmdsc.csv")) %>%
+  mutate(tnm_stage = factor(tnm_stage, levels = c(1, paste0(rep(2:4,each = 3),c("A","B","C"))) )) %>%
+  mutate(stage_num = substr(tnm_stage, 1,1))
+
+
+```
+
+# EDA
+
+```{r}
+skimr::skim(crc)
+
+crc %>% 
+  ggplot(aes(x = m_mdsc_pbmc_percent, fill = crc)) + 
+  geom_histogram(color = "black") + 
+  theme_bw() + 
+  facet_wrap(.~crc, nrow = 2) + 
+  labs(x = "mMDSC/PBMCs (%)") + 
+  theme(legend.position = "none")
+
+# just grab cases
+crc.cases = crc%>%filter(crc!="Healthy")
+
+# correlation plot
+pairs.panels(crc.cases[,c("sex","age","pdgf_bb_47","inos","m_mdsc_pbmc_percent")], ellipses = F, hist.col = "deepskyblue")
+
+```
+
+## Fit MLR model
+
+```{r}
+
+# fit linear model with sex, age, pdgf_bb_47 and inos
+fit_linear = lm(m_mdsc_pbmc_percent ~ sex + age + pdgf_bb_47 + inos, data = crc.cases)
+# check fit
+plot(fit_linear, which = 1:2)
+# component plus residuals plots
+crPlots(fit_linear, ylab = "C+R") # the y label was very long so I simplified it for the purpose of the slides :)
+summary(fit_linear)
+```
+
+## Try a log-transform
+
+```{r}
+# fit model with log-transformed outcome with sex, age, pdgf_bb_47 and inos
+fit_log = lm(log(m_mdsc_pbmc_percent, base = 10) ~ sex + age + pdgf_bb_47 + inos, data = crc.cases)
+# check fit
+plot(fit_log, which = 1:2)
+# component plus residuals plots
+crPlots(fit_log, ylab = "C+R")
+summary(fit_log)
+
+```
+
+## Try another log-transform
+
+```{r}
+
+# fit model with log-transformed outcome and predictors (not age or sex)
+fit_log_log = lm(log(m_mdsc_pbmc_percent, base = 10) ~ sex + age + I(log(pdgf_bb_47,10)) + I(log(inos,10)), data = crc.cases)
+# check fit
+plot(fit_log_log, which = 1:2)
+# component plus residuals plots
+crPlots(fit_log_log, ylab = "C+R")
+summary(fit_log_log)
+# confidence interval
+confint(fit_log_log)
+
+# added variable plots
+avPlots(fit_log_log, ylab = "mMDSC | Others")
+```
+
+## Check for influential points
+
+```{r}
+# check for collinearity
+vif(fit_log_log)
+
+# check for influential points
+influenceIndexPlot(fit_log_log, c("Cook","Studentized","Hat"))
+
+avPlots(fit_log_log, ylab = "mMDSC | Others", id = list(n = 3, method = cooks.distance(fit_log_log), col = "red"))
+
+# remove high influential point
+fit_ll_sens = lm(log(m_mdsc_pbmc_percent, 10) ~ sex + age + I(log(pdgf_bb_47, 10)) + I(log(inos, 10)), data = crc.cases, 
+                 subset = -c(56,57,65))
+# check for differences
+summary(fit_ll_sens) ; summary(fit_log_log)
+# component plus residuals plots
+crPlots(fit_ll_sens, ylab = "C+R")
+
+# robust regression model
+rfit_ll = rlm(log(m_mdsc_pbmc_percent,10) ~ sex + age + I(log(pdgf_bb_47,10)) + I(log(inos,10)), data = crc.cases)
+# compare
+summary(rfit_ll)
+
+```
+
+# Cerebral Blood Flow and Thyroid 
+
+## Data management 
+
+
+```{r}
+
+# read in Alzheimer's data
+ad = read_csv(here("Notes","Datasets","AD_data.csv")) %>% janitor::clean_names()
+
+
+```
+
+## EDA
+
+```{r}
+skimr::skim(ad)
+
+# correlation plot
+pairs.panels(ad%>%dplyr::select(sex,age_y,tsh, right_hippocampus), ellipses = F)
+
+# find the index of the clear outlier point (in tsh value)
+which.max(ad$tsh)
+
+# removing point 38
+pairs.panels(ad%>%dplyr::select(sex,age_y,tsh, right_hippocampus)%>%slice(-38), ellipses = F)
+```
+
+## Fit SLR model
+
+```{r}
+
+```
+
+## Fit MLR model and diagnostics
+
+```{r}
+
+
+
+```
+
+
+## Identify influential points
+
+```{r}
+
+
+```
+
+## Sensitivity to influential points
+
+```{r}
+
+
+```
+
+
+
+## Log-transformed TSH
+
+```{r}
+
+```
+
