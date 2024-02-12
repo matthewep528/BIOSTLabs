@@ -182,18 +182,6 @@ qqTest <- function(data, sample, title = "title", facet_var = NULL) {
 ```
 
 ```{r}
-#simple violin plot function
-#usage: ggViolin(data, y, fill, "title" (optional))
-ggViolin <- function(data, y, fill, title = "title") {
-    require(tidyverse)
-
-    ggplot(data, aes(x = {{ fill }}, y = {{ y }}, fill = {{ fill }})) +
-        geom_violin() +
-        labs(title = title)
-}
-```
-
-```{r}
 #density plots with optional grouping variable
 #can be faceted or together by specifying either group or color
 #usage: density.dodge(data, sample, group = "group" (optional), color = "NULL" (optional), title = "title" (optional) )
@@ -260,7 +248,7 @@ __Calculate some descriptive statistics and display some plots to learn about th
 (You don't have to do extensive summaries/plots, but get a sense of the types of variables, any missingness, distribution of certain variables
 that could be important in the regression models, and relationships between variables). You should create a factor variable for snout size.
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 weightStats <- summarize.var(data, weight, snout_f) %>%
   mutate_if(is.numeric, round, digits = 2)
 ageStats <- summarize.var(data, age, snout_f) %>%
@@ -270,16 +258,17 @@ bloodStats <- summarize.var(data, bloodtol, snout_f) %>%
 ppmStats <- summarize.var(data, newppm, snout_f) %>%
   mutate_if(is.numeric, round, digits = 2)
 
-weightplot <- ggDensity(data, weight, color = "snout_f", title = "1a. Weight")
-ageplot <- ggDensity(data, age, color = "snout_f", title = "1b. Age")
-bloodplot <- ggDensity(data, bloodtol, color = "snout_f", title = "1c. Blood Toluene (mg/L)")
-newppmplot <- ggDensity(data, newppm, color = "snout_f", title = "1d. Toluene Exposure (ppm)")
+weightplot <- ggDensity(data, weight, color = "snout_f", title = "1a. Weight") + geom_vline(aes(xintercept = mean, color = snout_f), data = weightStats, linetype = "dashed")
+ageplot <- ggDensity(data, age, color = "snout_f", title = "1b. Age") + geom_vline(aes(xintercept = mean, color = snout_f), data = ageStats, linetype = "dashed")
+bloodplot <- ggDensity(data, bloodtol, color = "snout_f", title = "1c. Blood Toluene (mg/L)") + geom_vline(aes(xintercept = mean, color = snout_f), data = bloodStats, linetype = "dashed")
+newppmplot <- ggDensity(data, newppm, color = "snout_f", title = "1d. Toluene Exposure (ppm)") + geom_vline(aes(xintercept = mean, color = snout_f), data = ppmStats, linetype = "dashed")
 grid.arrange(
   weightplot, ageplot, bloodplot, newppmplot,
   nrow = 2, ncol = 2,
   top = "Figure 1. Density Plots of Continuous Variables by Snout Size"
 )
-ggpubr::ggdensity(data, x = "weight", add = "mean", rug = TRUE, color = "snout_f", fill = "snout_f") %>% ggplotly()
+# ggpubr::ggdensity(data, x = "weight", add = "mean", rug = TRUE, color = "snout_f", fill = "snout_f") %>% ggplotly()
+# ggpubr made a very nice looking graph easily, but I just can't give up on the graph functions I spent so long making
 
 grid.arrange(
   tableGrob(weightStats),
@@ -289,6 +278,8 @@ grid.arrange(
   nrow = 4, ncol = 1,
   top = "Summary Statistics of Weight, Age, Blood Toluene, and Toluene Exposure (respectively) by Snout Size"
 )
+
+# residual plots here
 ```
 
 Comment on any potential problems or trends that you see:
