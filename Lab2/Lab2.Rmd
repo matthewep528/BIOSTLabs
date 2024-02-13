@@ -20,20 +20,20 @@ knitr::opts_chunk$set(error = T)
 ```
 
 ```{r, message=FALSE}
-
 library(tidyverse) # for data manipulation
 library(psych) # for pairiwse scatter plot function (not necessary but in case you want to use that function from the lecture code)
 library(car) # for extra model diagnostics like plots and vif() function
 library(MASS) # for rlm() function (robust regression)
 library(plotly)
 library(ggthemr)
-    ggthemr("flat dark")
+ggthemr("flat dark")
 library(gridExtra)
 library(ggh4x)
 library(kableExtra)
 library(jtools)
 library(rlang)
 library(here)
+library(skimr)
 # I'm not 100% sure how many of these I actually need, but I'll burn that bridge when I get there
 ```
 
@@ -41,7 +41,6 @@ library(here)
 # Function to summarize variables with optional grouping
 # Usage: summarize.var(dataset, var, group_var (optional))
 summarize.var <- function(dataset, var, group_var) {
-
   require(tidyverse)
   require(rlang)
 
@@ -70,10 +69,10 @@ ggResid <- function(fit) {
   # Extract fitted values and residuals from the linear model
   fitted_values <- fit$fitted.values
   residuals <- fit$residuals
-  
+
   # Create a data frame for the residuals vs. fitted values plot
   resid_data <- data.frame(Fitted = fitted_values, Residuals = residuals)
-  
+
   # Create the plot
   ggplot(resid_data, aes(x = Fitted, y = Residuals)) +
     geom_point() +
@@ -88,105 +87,68 @@ ggResid <- function(fit) {
 # Example usage:
 # fit <- lm(mpg ~ disp + hp, data = mtcars)
 # ggResid(fit)
-
 ```
 
 ```{r}
-# plotlyRegression: Scatterplot with line, SE, and summary statistics
-# requires a model to have been created beforehand
-# Usage: plotlyRegression(fit, title = "title" (optional))
-plotlyRegression <- function(fit, title = "title") {
-  require(plotly)
+# ggplotRegression
+# use to plot linear model with summary statistics and error
+# Usage: ggplotRegression(data)
+ggRegression <- function(fit, title = "title") {
+  require(ggplot2)
 
-  # Extract model data
-  df <- fit$model
-  x_var <- names(df)[2]
-  y_var <- names(df)[1]
-
-  # Create a scatter plot
-  p <- plot_ly(df, x = ~ df[[x_var]], y = ~ df[[y_var]], type = "scatter", mode = "markers")
-
-  # Get confidence interval data
-  confint_df <- data.frame(predict(fit, interval = "confidence"))
-  confint_df[[x_var]] <- df[[x_var]] # Adding the x variable to the dataframe
-
-  # Add linear regression line and 95% confidence interval
-  p <- p %>%
-    add_lines(
-      x = confint_df[[x_var]],
-      y = confint_df$fit,
-      line = list(color = "blue")
-    ) %>%
-    add_ribbons(
-      x = confint_df[[x_var]],
-      ymin = confint_df$lwr,
-      ymax = confint_df$upr,
-      line = list(color = "transparent"),
-      fillcolor = "rgba(0, 100, 255, 0.2)"
+  ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) +
+    geom_point() +
+    stat_smooth(
+      method = "lm",
+      geom = "smooth"
+    ) +
+    labs(
+      title = title,
+      subtitle = paste(
+        "Adj R2 = ", signif(summary(fit)$adj.r.squared, 5),
+        "Intercept =", signif(fit$coef[[1]], 5),
+        " Slope =", signif(fit$coef[[2]], 5),
+        " P =", signif(summary(fit)$coef[2, 4], 5)
+      )
     )
-
-  # Create subtitle with summary statistics
-  subtitle <- paste(
-    "Adj R2 =", signif(summary(fit)$adj.r.squared, 5),
-    ", Intercept =", signif(fit$coef[[1]], 5),
-    ", Slope =", signif(fit$coef[[2]], 5),
-    ", P =", signif(summary(fit)$coef[2, 4], 5)
-  )
-
-  # Add layout with combined title and subtitle
-  p <- p %>%
-    layout(
-      title = list(
-        text = paste0(title, "<br><sup>", subtitle, "</sup>"),
-        font = list(size = 16)
-      ),
-      plot_bgcolor = "#2c2c2c",
-      paper_bgcolor = "#2c2c2c",
-      font = list(color = "#ffffff"),
-      xaxis = list(title = x_var, color = "#ffffff"),
-      yaxis = list(title = y_var, color = "#ffffff")
-    )
-
-  return(p)
 }
 ```
 
 ```{r}
 qqTest <- function(data, sample, title = "title", facet_var = NULL) {
-    require(tidyverse)
+  require(tidyverse)
 
-    gg <- ggplot(data,
-        aes(sample = {{ sample }})) +
-        stat_qq() +
-        stat_qq_line(
-            size = 0.8,
-        ) +
-        labs(
-            title = title,
-            x = "Theoretical Quantiles",
-            y = "Sample Quantiles"
-        ) +
-        guides(color = "none")
+  gg <- ggplot(
+    data,
+    aes(sample = {{ sample }})
+  ) +
+    stat_qq() +
+    stat_qq_line(
+      size = 0.8,
+    ) +
+    labs(
+      title = title,
+      x = "Theoretical Quantiles",
+      y = "Sample Quantiles"
+    ) +
+    guides(color = "none")
 
-    if (!is.null(facet_var)) {
+  if (!is.null(facet_var)) {
+    # Extract colors from facet_var variable
+    colors <- pull(data, {{ facet_var }})
 
-        # Extract colors from facet_var variable
-        colors <- pull(data, {{ facet_var }})
+    gg <- gg + aes(color = factor(colors)) + facet_wrap(as.formula(paste("~", facet_var)))
+  }
 
-        gg <- gg + aes(color = factor(colors)) + facet_wrap(as.formula(paste("~", facet_var)))
-    }
-
-    return(gg)
+  return(gg)
 }
-
 ```
 
 ```{r}
-#density plots with optional grouping variable
-#can be faceted or together by specifying either group or color
-#usage: density.dodge(data, sample, group = "group" (optional), color = "NULL" (optional), title = "title" (optional) )
+# density plots with optional grouping variable
+# can be faceted or together by specifying either group or color
+# usage: density.dodge(data, sample, group = "group" (optional), color = "NULL" (optional), title = "title" (optional) )
 ggDensity <- function(data, sample, group = NULL, color = NULL, title = "Insert Title") {
-
   require(ggplot2)
 
   plot <- ggplot(data, aes(x = {{ sample }})) +
@@ -198,7 +160,6 @@ ggDensity <- function(data, sample, group = NULL, color = NULL, title = "Insert 
     )
 
   if (!is.null(group)) {
-
     colors <- pull(data, {{ group }})
 
     plot <- plot + aes(color = factor(colors)) +
@@ -207,7 +168,6 @@ ggDensity <- function(data, sample, group = NULL, color = NULL, title = "Insert 
   }
 
   if (!is.null(color)) {
-
     colors <- pull(data, {{ color }})
 
     plot <- plot + aes(fill = factor(colors), color = factor(colors), alpha = 0.02) +
@@ -230,15 +190,15 @@ We will use these data to model the relationship between toluene exposure and bl
 ```{r, message = FALSE, warning = FALSE}
 setwd("Lab2")
 
-#reading data and making factor variable for snout size
+# reading data and making factor variable for snout size
 data <- read_csv("hwdata2.csv") %>%
-    mutate(
-      snout_f = factor(snoutsize - 1,
-        levels = c(0, 1),
-        labels = c("short", "long")),
-      snoutsize = as.factor(snoutsize))
-
-
+  mutate(
+    snout_f = factor(snoutsize - 1,
+      levels = c(0, 1),
+      labels = c("short", "long")
+    ),
+    snoutsize = as.factor(snoutsize)
+  )
 ```
 
 
@@ -262,55 +222,62 @@ weightplot <- ggDensity(data, weight, color = "snout_f", title = "1a. Weight") +
 ageplot <- ggDensity(data, age, color = "snout_f", title = "1b. Age") + geom_vline(aes(xintercept = mean, color = snout_f), data = ageStats, linetype = "dashed")
 bloodplot <- ggDensity(data, bloodtol, color = "snout_f", title = "1c. Blood Toluene (mg/L)") + geom_vline(aes(xintercept = mean, color = snout_f), data = bloodStats, linetype = "dashed")
 newppmplot <- ggDensity(data, newppm, color = "snout_f", title = "1d. Toluene Exposure (ppm)") + geom_vline(aes(xintercept = mean, color = snout_f), data = ppmStats, linetype = "dashed")
+
 grid.arrange(
   weightplot, ageplot, bloodplot, newppmplot,
   nrow = 2, ncol = 2,
   top = "Figure 1. Density Plots of Continuous Variables by Snout Size"
 )
+
 # ggpubr::ggdensity(data, x = "weight", add = "mean", rug = TRUE, color = "snout_f", fill = "snout_f") %>% ggplotly()
-# ggpubr made a very nice looking graph easily, but I just can't give up on the graph functions I spent so long making
 
-grid.arrange(
-  tableGrob(weightStats),
-  tableGrob(ageStats),
-  tableGrob(bloodStats),
-  tableGrob(ppmStats),
-  nrow = 4, ncol = 1,
-  top = "Summary Statistics of Weight, Age, Blood Toluene, and Toluene Exposure (respectively) by Snout Size"
+# pWeight <- ggplotly(weightplot)
+# pAge <- ggplotly(ageplot)
+# pBlood <- ggplotly(bloodplot)
+# pPPM <- ggplotly(newppmplot)
+
+# subplot(pWeight, pAge, pBlood, pPPM, nrows = 2)
+
+skimr::skim(data)
+
+pairs.panels(data[, c("bloodtol", "weight", "age", "newppm")],
+  ellipses = FALSE, density = FALSE, hist.col = "deepskyblue"
 )
-
-# residual plots here
 ```
 
-Comment on any potential problems or trends that you see:
-
+Much of the data appear to be skewed and multimodal, although weight is much less so than the other continuous variables. There were no missing values.
 
 
 # Part 2) SLR
 
-__Fit a regression model for blood toluene (bloodtol) that contains only toluene exposure (newppm) as a predictor and perform a graphical analysis to assess the linearity, equal variance, and normality assumptions of linear regression. Interpret the plots and evaluate if you believe the assumptions are met.__
+__Fit a regression model for blood toluene (bloodtol) that contains only toluene exposure (newppm) as a predictor and perform a graphical analysis to assess the linearity, equal variance, and normality assumptions of linear regression.__
+__Interpret the plots and evaluate if you believe the assumptions are met.__
 
 ```{r}
 # fit slr model
+bloodPPM <- lm(bloodtol ~ newppm, data = data)
 
+ggRegression(bloodPPM, title = "Plot of Blood Toluene by Toluene Exposure (PPM)")
+
+ggResid(bloodPPM)
+
+qqTest(bloodPPM, .stdresid, title = "QQ Test of Residuals")
 
 # plot residual vs fitted and residual qq-plot
 # hint: if you've saved your model above you can use the plot() function and specify which = 1:2 to tell R to only print the first 2 plots
-
 ```
 
-Interpretation of plots/evaluation of assumptions:
+Interpretation of plots/evaluation of assumptions:  
+The qq-plot of the residuals show
 
 # Part 3) MLR
 
 __We will now add the other covariates to the model. Assess which variables appear to be important and explicitly test if there is effect modification (interaction) of toluene exposure by weight, age, or snout size.__
 
 ```{r}
-
 # model with interactions included
 
 # test if the interactions are useful (you can just tun one test to test them all at once)
-
 ```
 
 Comment on important variables and if interactions seem necessary:
@@ -321,7 +288,6 @@ __Check for collinearity between the 4 covariates (exposure, age, weight, snout 
 
 ```{r}
 # measure of collinearity in the model involving exposure, weight, age, and snout size
-
 ```
 
 Interpretation:
@@ -332,8 +298,6 @@ Interpretation:
 __Based on your analysis so far, choose the model that you believe is the best. Use this as your final model. Justify why you chose this model and comment on any potential assumption violations in this model (a few residual plots may be helpful for this).__
 
 ```{r}
-
-
 
 ```
 
@@ -346,9 +310,7 @@ __Based on the model you chose in part 5, identify poorly fit, high leverage poi
 
 
 ```{r}
-
 # the influence index plotting functions from the `car` (such as influenceIndexPlot()) may be useful to spot these points
-
 ```
 
 
@@ -362,12 +324,10 @@ __Perform a sensitivity analysis by refitting the model excluding the troublesom
 ```{r}
 # fit model removing outlier/influential points
 # you can create a new data frame with the points remove or input the filtering in the lm() function
-# for examplem if I wanted to remove the second and tenth rows I could run: lm(y ~ x1 + x2, data = mydata %>% slice(-c(2,10))) 
+# for examplem if I wanted to remove the second and tenth rows I could run: lm(y ~ x1 + x2, data = mydata %>% slice(-c(2,10)))
 # the slice() function grabs or removes (if included with a `-` sign) rows by their index
 
 # compare the two models
-
- 
 ```
  
 
@@ -378,7 +338,6 @@ __Fit a robust regression using the model you chose in part 5 and compare the tw
 
 ```{r}
 # fit robust regression model (rlm() funciton from `MASS` package)
-
 ```
 
 
@@ -402,7 +361,5 @@ __Summarize your findings from parts 1-9 (model chosen, trends found using said 
 
 
 ```{r}
-
 sessionInfo()
-
 ```
