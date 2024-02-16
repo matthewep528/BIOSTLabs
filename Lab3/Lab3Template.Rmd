@@ -1,0 +1,364 @@
+---
+title: "M3 Lab"
+author: "YOUR NAME HERE"
+date: "Spring 2024"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+require(knitr)
+# this line of code is added so that the file can be knitted even when error messages are produced by your code
+knitr::opts_chunk$set(error = T)
+```
+
+```{r}
+
+library(tidyverse)
+library(here)
+library(car)
+library(psych)
+library(MASS)
+library(lspline)
+library(splines)
+library(readxl)
+library(glmnet)
+
+
+```
+
+# Part 1: Blood Toluene
+## Data Management
+
+We will continue using the same data from the module 2 lab for the first part of this lab.
+
+From last time: 
+
+The following data come from a study of the impacts of toluene exposure through inhalation on toluene concentration in the blood. In the study, 60 rats were exposed to differing levels of toluene inhalation, from 11.34 to 1744.7 parts per million (ppm) (newppm) for a duration of 3 hours. Blood levels were measured (bloodtol) following exposure measured in mg/L. Other variables measured were weight in grams (weight), age in days (age), and snout size as either short (snoutsize=1) or long (snoutsize=2).
+
+We will use these data to model the relationship between toluene exposure and blood concentration, possibly adjusting for other variables.
+
+
+
+```{r}
+# read in data for part 1 (blood toluene data, same as lab 2)
+
+```
+
+
+## 1. SLR model
+
+__Fit a simple linear model with bloodtol as the dependent variable and just newppm as the independent variable. Create a components plus residuals plot for this model. Do you notice anything problematic in this plot?__
+
+```{r}
+# linear model
+
+
+# C+R plot
+
+
+```
+
+Comment on plot:
+
+## 2. Fit a LOESS curve
+
+__Fit a LOESS curve over the scatterplot of blood toluene (bloodtol) on toluene exposure (newppm). Try three different values of span (the parameter that controls how smooth the curve is): 0.5, 0.75, and 2. Comment on what you see.__
+
+```{r}
+# loess curve plot
+# recall that you can use geom_smooth(method = "loess", span = __) to get a loess curve over a scatterplot (made with geom_point() in ggplot)
+
+```
+
+Comment on what you see:
+
+## 3. Linear spline model
+
+__Fit a model with linear splines using knots at newppm values of 125, 375, and 625. Use marginal coefficients for the spline terms in this model. Make a plot showing the model fit.__
+
+
+```{r}
+# linear spline plot
+# recall that you can use 
+# geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(knot1, knot2, etc...))) 
+# reminder that here we don't acually substitutde in variable names for x and y (they're taken from the x and y variables oyu define in the main aes() arguments when you made your ggplot plot)
+
+
+
+# fit linear spline model with marginal coefficients
+# reminder: syntax to make linear splines using `lspline` package is
+# lspline(variable_name, knots = c(knot1, knot2, ...), marginal = T/F)
+
+
+# show output
+
+
+```
+
+## 4. Marginal vs not marginal splines
+
+__Fit a second model without marginal coefficients. What do you notice about these coefficients compared to the previous model?__
+
+```{r}
+
+# linear splines without marginal = T (with marginal = F)
+
+
+# show output
+
+
+
+```
+
+Compare the output from the two models
+
+## 5. Estimating slope at a particualr point
+
+__Based on either of the spline models above, what is the estimated slope when the newppm value is 300 (newppm = 300)?__
+
+Answer here: 
+
+## 6. Natural splines
+
+__Fit a model with natural splines with 4 knots (you can let R pick the location of the knots by creating natural splines with 5 degrees of freedom). Make a plot showing the fit of this model and comment on the fit (visually).__
+
+```{r}
+# natural spline plot
+# recall that you can use 
+# geom_smooth(method = "lm", formula = y ~ ns(x, df = ?)) 
+
+
+
+
+# fit natural spline model with marginal coefficients
+# reminder: syntax to make natural splines using `splines` package is
+# ns(variable_name, df = # knots + 1)
+# you could also specify the location of the knots, but specifying df lets R choose them for you
+
+
+
+# model output
+
+```
+
+Comment on the fit of the model:
+
+## 7. Residual plots for the models fit so far
+
+__Make residual plots for each of the models (you can just choose one parameterization of the linear spline model) above and comment on any differences you see.__
+
+```{r}
+
+# plots for linear model
+
+
+# plots for linear spline model
+
+
+# plots for natural spline model
+
+
+```
+
+Comments: 
+
+## 8. Test for linearity
+
+__Using the linear spline and natural spline models, run tests for linearity. Do we have evidence of non-linearity?__
+
+```{r}
+# test for linearity (linear spline model)
+
+# test for linearity (natural spline model)
+
+
+
+```
+
+Interpretation of output:
+
+
+
+## 9. Model fit based on various metrics
+
+__Compare the fits of the linear, linear spline, and natural spline models. In particular, compare the $R^2$/adjusted $R^2$ values, mean squared errors, AICs, and BICs. Which do you prefer? Justify your answer.__
+
+
+```{r}
+# model fit metrics
+# you can do this a few ways but the glance() function from the `broom` package is a nice way to get lots of these metrics all with one function
+
+```
+
+Comparison and your preference:
+
+# Part 2: NHANES Study
+
+The following data come from the NHANES study. We are interested in estimating ferritin levels based on a handful of covariates in the data.
+
+## Data management
+
+```{r}
+# load in data (change as needed to a file path that works on your device)
+nhanes = read_csv(here("Labs","Datasets","nhanes_subset.csv"))
+
+```
+
+## 1. Full model:
+
+__Fit a multiple linear regression to estimate ferritin with all predictors in the data set. Check the residual plots and construct component plus residual plots and check for influential points. Do you think any data transformation might be helpful here?__
+
+```{r}
+# fit max model
+# if you want to fit a model with all variables in a dataset you can use the syntax
+# lm(outcome ~ . , data = data_name)
+# instead of writing every variable name. :) 
+
+# check model fit and check for influential points
+# residual plots
+
+# C+R plots
+
+
+
+
+
+```
+
+Describe what you see and if you think any transformation(s) may be helpful:
+
+## Transforming Variables
+
+(no points here, I've included the code for you)
+
+__Regardless of your answer above, let's go ahead and log-transform a few of the variables that had skewed distributions so they don't have such high leverage. I've included the code for you below and dropped the original variables from the data so we don't have redundancies for the upcoming sections and refit the model from above with the log-transformed data. Notice that the log-transformation seems to have helped__
+
+Note: you don't have to write any code here, just run it so you're working with the log-transformed data.
+
+```{r}
+# log transforming and dropping un-transformed values
+nhanes = nhanes %>%
+  mutate(log_creatinine_urine = log(creatinine_urine),
+         log_insulin = log(insulin),
+         log_ferritin = log(ferritin),
+         log_ghb = log(glycohemoglobin)) %>%
+  dplyr::select(-c(creatinine_urine, insulin, ferritin, glycohemoglobin)) # remove original variables
+
+# refit model with all predictors 
+maxmodel_log = lm(log_ferritin ~ ., data = nhanes)
+
+# check model fit and check for influential points
+# residual plots
+plot(maxmodel_log, which = 1:2)
+# C+R plots
+crPlots(maxmodel_log, ylab = "C + R (ferritin)")
+
+
+```
+
+Nice! That seems to have helped. 
+
+## 2. VIF
+
+__Check for collinearity in the model that you just fit with all predictors included . Do you see any problematic collinearity?__
+
+```{r}
+# check for collinearity
+
+```
+
+Comments:
+
+
+## 3. Variable selection
+
+__Run backward selection as well as cross-validated (10-fold) lasso regression, ridge regression, and elastic net to choose a model from the full set of covariates used in the previous section. Compare the set of variables and coefficients you end up with from each method of variable selection. What do you notice?__
+
+*Note: The function I taught you for backward selection doesn't have any cross-validation capabilities built-in. There are ways to do cross-validated forward/backward selection(either by hand or with other R packages) but for now we won't. Also note that this is part of the reason why the step function uses AIC to pick variables (trying to control for overfitting)*
+
+```{r}
+set.seed(123) # for cross-validation later
+
+# backward selection (no cross-validation)
+
+# remember that the cv.glmnet() function needs separate X (predictor) and Y (outcome) matrices
+# for example, since I called my model `maxmodel_log` I would do
+#X = model.matrix(maxmodel_log)[,-1]
+#Y = maxmodel_log$model$log_ferritin
+
+# fit lasso (you'll need to choose the approproate alpha value)
+
+
+
+# fit ridge (you'll need to choose the approproate alpha value)
+
+
+
+# elastic net (use alpha = 0.5 for this)
+
+
+# compare the coefficients/variables chosen
+# for a model named `my.model` fit with cv.glmnet
+# you can use coef(my.model, s = my.model$lambda.min) to grab the coefficients
+# stepAIC for backward selection uses the same syntax as a regular lm model so you can use 
+# my.model$coefficients for a model fit with stepAIC
+
+
+
+
+```
+
+Comment on similarities/differences between the final models from the various selection processes.
+
+
+## 4. VIFs and model selection
+
+__Think back to the VIF values you got from the full model. What do you notice about the variables retained in these various models with respect to our collinearity results from above? Why do you think that is?__
+
+Answer here:
+
+## 5. Compare model fit
+
+__Compare the model fit from the final models from lasso, ridge, and elastic net. Which model would you prefer?__
+
+Note: I didn't include backward selection for this question because we didn't use cross-validation for that method, so that wouldn't be a very fair comparison.
+
+```{r}
+
+# reminder that the mean squared error (averaged across CV folds) is stored in my.model$glmnet.fit$cvm
+# the R2 value is stored in my.model$glmnet.fit$dev.ratio
+
+# these will have lots of MSEs and R2 values, one for each tunring parameter value 
+# the best tuning parameter index is stored in my.model$index[1] (for the minimum MSE)
+# you can use that index to grab the MSE and R2 value from the model with the best tuning parameter
+
+# MSEs from the 3 different models
+
+
+# R2 values
+
+
+
+```
+
+Your model choice and rationale:
+
+## 6. Cross-validation
+
+__What was the purpose of using cross-validation in these models?__
+
+Answer here:
+
+
+
+```{r}
+
+sessionInfo()
+
+```
+

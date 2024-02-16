@@ -1,0 +1,323 @@
+---
+title: 'Module 3 Lecture Code: Part I'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(error = T)
+
+```
+
+```{r}
+
+library(tidyverse)
+library(here)
+library(car)
+library(MASS)
+library(lspline)
+library(splines)
+library(readxl)
+
+
+
+```
+
+# Lecture 1
+
+## Data management
+
+
+```{r}
+
+i_am("Notes/Module 3/M3LectureCode.Rmd")
+
+bmd = read_csv(here("Notes","Datasets","bmd.csv"))
+
+
+```
+
+# Lecture 1
+
+## LOESS Smoother
+
+```{r, warning=F, message=F}
+
+
+# scatter plot with colored points
+bmd %>%
+  ggplot(aes(x = age, y = relative_diff, color = sex)) + 
+  theme_bw() + 
+  geom_point() + 
+  labs(x = "Age", y = "Relative Change in BMD", 
+       color = element_blank())
+
+
+# linear fit doesn't seem to fit well
+fit1 <- lm(relative_diff ~ sex * age, data = bmd)
+plot(fit1, which = 1)
+
+
+# plots with loess smoother
+# loess is actually the default smoother, but I include the argument so you can see where loess comes in 
+bmd %>%
+  ggplot(aes(x = age, y = relative_diff, color = sex, fill = sex)) + 
+  theme_bw() + 
+  geom_point() + 
+  geom_smooth(method = "loess") +
+  facet_wrap(.~ sex) + 
+  labs(x = "Age", y = "Relative Change in BMD") + 
+  theme(legend.position = "none")
+
+#changing size of neighborhood
+# small neighborhood
+bmd %>%
+  ggplot(aes(x = age, y = relative_diff, color = sex, fill = sex)) + 
+  theme_bw() + 
+  geom_point() + 
+  geom_smooth(method = "loess", span = .1) +
+  facet_wrap(.~ sex) + 
+  labs(x = "Age", y = "Relative Change in BMD") + 
+  theme(legend.position = "none")
+
+# large neighborhood
+bmd %>%
+  ggplot(aes(x = age, y = relative_diff, color = sex, fill = sex)) + 
+  theme_bw() + 
+  geom_point() + 
+  geom_smooth(method = "loess", span = 1) +
+  facet_wrap(.~ sex) + 
+  labs(x = "Age", y = "Relative Change in BMD") + 
+  theme(legend.position = "none")
+
+```
+
+## Linear Spline
+
+```{r}
+
+# filtering data into groups 
+bmd.f = bmd %>% filter(sex == "Female")
+bmd.m = bmd %>% filter(sex == "Male")
+
+# fit model for each group (knots appear to be at different points)
+spline.fit.f = lm(relative_diff ~ lspline(age, knots = c(13,21),marginal = T), data = bmd.f)
+spline.fit.m = lm(relative_diff ~ lspline(age, knots = c(15,21),marginal = T), data = bmd.m)
+
+
+# plot fit of spline model for female group
+bmd.f %>%
+  mutate(pred = predict(spline.fit.f)) %>%
+  ggplot(aes(x = age, y = relative_diff)) + 
+  theme_bw() + 
+  geom_point(color = "#F8766D") +
+  labs(y = "Relative Difference in BMD (per year)", 
+       x = "Age at Second Visit",
+       title = "Linear Spline Model (Female)") + 
+  geom_smooth(method = "lm", color = "#F8766D",
+              formula = y ~ lspline(x, knots = c(13,21),marginal = T))
+
+# plot fit of spline model for male group
+bmd.m %>%
+  mutate(pred = predict(spline.fit.m)) %>%
+  ggplot(aes(x = age, y = relative_diff)) + 
+  theme_bw() + 
+  geom_point(color = "#00BFC4") +
+  labs(y = "Relative Difference in BMD (per year)", 
+       x = "Age at Second Visit",
+       title = "Linear Spline Model (Male)") +
+  geom_smooth(method = "lm",color = "#00BFC4",
+              formula = y ~ lspline(x, knots = c(15,21),marginal = T))
+
+
+
+# model output
+summary(spline.fit.f)
+summary(spline.fit.m)
+
+
+```
+
+## Cubic and Restricted Cubic Splines
+
+```{r}
+
+bmd %>%
+  ggplot(aes(x = age, y = relative_diff, color = sex)) + 
+  theme_bw() + 
+  geom_point() +
+  labs(y = "Relative Difference in BMD (per year)", 
+       x = "Age at Second Visit",
+       title = "Cubic Spline Model",
+       subtitle = "1 knot") +
+  geom_smooth(method = "lm",
+              formula = y ~ bs(x, df = 4)) + # 1 knot (df - degree (3))
+  facet_wrap(.~ sex )
+
+bmd %>%
+  ggplot(aes(x = age, y = relative_diff, color = sex)) + 
+  theme_bw() + 
+  geom_point() +
+  labs(y = "Relative Difference in BMD (per year)", 
+       x = "Age at Second Visit",
+       title = "Cubic Spline Model",
+       subtitle = "2 knots") +
+  geom_smooth(method = "lm",
+              formula = y ~ bs(x, df = 5)) + # 2 knots (df - degree (3))
+  facet_wrap(.~ sex )
+
+
+# cubic splines
+cubic.spline.fit.f = lm(relative_diff ~ bs(age, df = 4), data = bmd.f)
+cubic.spline.fit.m = lm(relative_diff ~ bs(age, df = 4), data = bmd.m)
+
+
+
+# plot natural splines
+# 2 knots
+bmd %>%
+  ggplot(aes(x = age, y = relative_diff, color = sex)) + 
+  theme_bw() + 
+  geom_point() +
+  labs(y = "Relative Difference in BMD (per year)", 
+       x = "Age at Second Visit",
+       title = "Natural Spline Model",
+       subtitle = "2 knots") +
+  geom_smooth(method = "lm",
+              formula = y ~ ns(x,df = 3)) +# 2 knots (df-1)
+  facet_wrap(.~ sex)
+
+# 3 knots
+bmd %>%
+  ggplot(aes(x = age, y = relative_diff, color = sex)) + 
+  theme_bw() + 
+  geom_point() +
+  labs(y = "Relative Difference in BMD (per year)", 
+       x = "Age at Second Visit",
+       title = "Natural Spline Model",
+       subtitle = "3 knots") +
+  geom_smooth(method = "lm",
+              formula = y ~ ns(x,df = 4)) +# 3 knots (df-1)
+  facet_wrap(.~ sex)
+
+
+# restricted cubic splines (natural splines)
+natural.spline.fit.f = lm(relative_diff ~ ns(age, df=4), data = bmd.f)
+natural.spline.fit.m = lm(relative_diff ~ ns(age, df=3), data = bmd.m)
+
+
+
+# plot fit of natural spline model for female group
+bmd.f %>%
+  ggplot(aes(x = age, y = relative_diff)) + 
+  theme_bw() + 
+  geom_point(color = "#F8766D") +
+  labs(y = "Relative Difference in BMD (per year)", 
+       x = "Age at Second Visit",
+       title = "Restricted Cubic Spline Model (Female)") +
+   geom_smooth(method = "lm",
+               color = "#F8766D", fill = "#F8766D",
+              formula = y ~ ns(x, df = 4)) 
+
+# plot fit of natural spline model for male group
+bmd.m %>%
+  ggplot(aes(x = age, y = relative_diff)) + 
+  theme_bw() + 
+  geom_point(color = "#00BFC4") +
+  labs(y = "Relative Difference in BMD (per year)", 
+       x = "Age at Second Visit",
+       title = "Restricted Cubic Spline Model (Male)") +
+   geom_smooth(method = "lm",
+               color = "#00BFC4", fill = "#00BFC4",
+              formula = y ~ ns(x, df = 3)) 
+
+
+# predicted values for particular ages
+data.frame(age = c(12,15,18,21)) %>% bind_cols(
+predict(natural.spline.fit.f, 
+        newdata = data.frame(age = c(12,15,18,21)),
+        interval = "confidence") )
+
+
+data.frame(age = c(12,15,18,21)) %>% bind_cols(
+predict(natural.spline.fit.m, 
+        newdata = data.frame(age = c(12,15,18,21)),
+        interval = "confidence") )
+```
+
+## Testing for non-linearity
+
+```{r}
+
+
+# fit linear models for nested models test
+linfit.f =  lm(relative_diff ~age, data = bmd.f)
+linfit.m =  lm(relative_diff ~age, data = bmd.m)
+
+# nested models tests
+anova(linfit.f, spline.fit.f)
+anova(linfit.m, spline.fit.m)
+
+# nested models tests
+anova(linfit.f, natural.spline.fit.f)
+anova(linfit.m, natural.spline.fit.m)
+
+```
+
+
+```{r}
+# make age groups to run anova
+# female group
+bmd.f = bmd.f %>%
+  mutate(age_group = case_when(age < 12 ~ "Under 12",
+                               12 <= age & age < 15 ~ "12 - 15",
+                               15 <= age & age < 18 ~ "15 - 18",
+                               age >= 18 ~ "18 and older") %>%
+           factor(., levels = c("Under 12", "12 - 15","15 - 18", "18 and older")))
+
+# male group
+bmd.m = bmd.m %>%
+  mutate(age_group = case_when(age < 13 ~ "Under 13",
+                               13 <= age & age < 16 ~ "13 - 16",
+                               16 <= age & age < 20 ~ "16 - 20",
+                               age >= 20 ~"20 and older") %>%
+           factor(.,levels = c("Under 13", "13 - 16","16 - 20", "20 and older")))
+
+# run models
+cat.fit.f = lm(relative_diff ~ age_group, data = bmd.f)
+cat.fit.m = lm(relative_diff ~ age_group, data = bmd.m)
+
+# model output
+summary(cat.fit.f)
+summary(cat.fit.m)
+
+# plot fits
+bmd.f %>%
+  ggplot(aes(x = age_group, y = relative_diff)) +
+  geom_boxplot() + 
+  theme_bw() + 
+  labs(x = "Age Group", y = "Change in BMD", title = "Female")
+
+bmd.m %>%
+  ggplot(aes(x = age_group, y = relative_diff)) +
+  geom_boxplot() + 
+  theme_bw() + 
+  labs(x = "Age Group", y = "Change in BMD",
+       title = "Male")
+
+
+
+
+
+```
+
+
+
+
+

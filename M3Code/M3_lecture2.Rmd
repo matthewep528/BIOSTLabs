@@ -1,0 +1,161 @@
+---
+title: 'Module 3 Lecture Code: Part I'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(error = T)
+
+```
+
+```{r}
+
+library(tidyverse)
+library(here)
+library(car)
+library(MASS)
+library(lspline)
+library(splines)
+library(cv)
+
+
+```
+
+# Lecture 2
+
+## Simulated Example
+
+```{r}
+# set seed so randomly generated variables are always the same
+set.seed(1234)
+
+# generate two predictors (x1 and x2)
+x1 = rnorm(n = 50, mean = 10, sd = 2)
+x2 = runif(n = 50)
+# generate error term
+error = rnorm(n=50, sd = 2.5)
+# generate outcome; only related to x1
+y = 4 + x1 + error
+
+# fit linear model with just predictor related to y
+model1 <- lm(y ~ x1)
+# fit linear model with extra unnecessary predictor
+model2 <- lm(y ~ x1 + x2)
+
+# show model output for both models
+# notice R2 and adjusted R2 values
+summary(model1)
+summary(model2)
+
+# R2 value increased in larger model (barely), but adjusted R2 value did not
+
+# correlation between pairs of variables
+psych::pairs.panels(x = data.frame(x1,x2,y), ellipses = F)
+# show added variables plot for bigger model
+avPlots(model2)
+
+# test if model 2 is much better than model 1
+anova(model1, model2)
+
+AIC(model1)
+AIC(model2)
+
+BIC(model1)
+BIC(model2)
+```
+
+## Data management
+
+
+```{r}
+i_am("Notes/Module 3/M3_lecture2.Rmd")
+
+bmd = read_csv(here("Notes","Datasets","bmd.csv"))
+
+
+```
+
+Code from last time that we'll use again
+
+
+```{r}
+# filtering data into groups 
+bmd.f = bmd %>% filter(sex == "Female")
+
+
+# fit model for each group (knots appear to be at different points)
+spline.fit.f = lm(relative_diff ~ lspline(age, knots = c(13,21),marginal = T), data = bmd.f)
+
+
+# restricted cubic splines (natural splines)
+natural.spline.fit.f = lm(relative_diff ~ ns(age, df=4), data = bmd.f)
+# figure out where the spines were
+n.spline.terms = ns(bmd.f$age, df=4)
+attr(n.spline.terms, "knots")
+
+# fit linear models for nested models test
+linfit.f =  lm(relative_diff ~ age, data = bmd.f)
+
+
+```
+
+## Model Fit Metrics
+
+```{r}
+
+# summary of linear fit
+summary(linfit.f)
+
+# summary of spline fit
+summary(spline.fit.f)
+
+# summary of natural spline fit
+summary(natural.spline.fit.f)
+
+# nested models tests
+anova(linfit.f, spline.fit.f)
+anova(linfit.f, natural.spline.fit.f)
+
+
+# AIC values to compare non-nested models
+AIC(spline.fit.f)
+AIC(natural.spline.fit.f)
+
+# BIC values to compare non-nested models
+BIC(spline.fit.f)
+BIC(natural.spline.fit.f)
+
+# print multiple model metrics
+broom::glance(linfit.f)
+broom::glance(spline.fit.f)
+broom::glance(natural.spline.fit.f)
+
+```
+
+## Cross Validation
+
+```{r}
+set.seed(123)
+
+# 10-fold cross validation for linear spline model
+cv(spline.fit.f, k = 10)
+
+# 10-fold cross validation for natural spline model
+cv(natural.spline.fit.f, k = 10)
+
+# leave-on-out cross validation for linear spline model
+cv(spline.fit.f, k = "n")
+
+# leave-on-out cross validation for natural spline model
+cv(natural.spline.fit.f, k = "n")
+
+```
+
+
