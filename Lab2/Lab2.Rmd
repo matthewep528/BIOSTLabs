@@ -20,28 +20,28 @@ knitr::opts_chunk$set(error = T)
 ```
 
 ```{r, message=FALSE}
-
 library(tidyverse) # for data manipulation
 library(psych) # for pairiwse scatter plot function (not necessary but in case you want to use that function from the lecture code)
 library(car) # for extra model diagnostics like plots and vif() function
 library(MASS) # for rlm() function (robust regression)
 library(plotly)
 library(ggthemr)
-    ggthemr("flat dark")
+ggthemr("flat dark")
 library(gridExtra)
 library(ggh4x)
 library(kableExtra)
 library(jtools)
 library(rlang)
 library(here)
-# I'm not 100% sure how many of these I actually need, but I'll burn that bridge when I get there
+library(skimr)
+library(corrplot)
+library(broom)
 ```
 
 ```{r}
 # Function to summarize variables with optional grouping
 # Usage: summarize.var(dataset, var, group_var (optional))
 summarize.var <- function(dataset, var, group_var) {
-
   require(tidyverse)
   require(rlang)
 
@@ -70,10 +70,10 @@ ggResid <- function(fit) {
   # Extract fitted values and residuals from the linear model
   fitted_values <- fit$fitted.values
   residuals <- fit$residuals
-  
+
   # Create a data frame for the residuals vs. fitted values plot
   resid_data <- data.frame(Fitted = fitted_values, Residuals = residuals)
-  
+
   # Create the plot
   ggplot(resid_data, aes(x = Fitted, y = Residuals)) +
     geom_point() +
@@ -88,105 +88,68 @@ ggResid <- function(fit) {
 # Example usage:
 # fit <- lm(mpg ~ disp + hp, data = mtcars)
 # ggResid(fit)
-
 ```
 
 ```{r}
-# plotlyRegression: Scatterplot with line, SE, and summary statistics
-# requires a model to have been created beforehand
-# Usage: plotlyRegression(fit, title = "title" (optional))
-plotlyRegression <- function(fit, title = "title") {
-  require(plotly)
+# ggplotRegression
+# use to plot linear model with summary statistics and error
+# Usage: ggplotRegression(data)
+ggRegression <- function(fit, title = "title") {
+  require(ggplot2)
 
-  # Extract model data
-  df <- fit$model
-  x_var <- names(df)[2]
-  y_var <- names(df)[1]
-
-  # Create a scatter plot
-  p <- plot_ly(df, x = ~ df[[x_var]], y = ~ df[[y_var]], type = "scatter", mode = "markers")
-
-  # Get confidence interval data
-  confint_df <- data.frame(predict(fit, interval = "confidence"))
-  confint_df[[x_var]] <- df[[x_var]] # Adding the x variable to the dataframe
-
-  # Add linear regression line and 95% confidence interval
-  p <- p %>%
-    add_lines(
-      x = confint_df[[x_var]],
-      y = confint_df$fit,
-      line = list(color = "blue")
-    ) %>%
-    add_ribbons(
-      x = confint_df[[x_var]],
-      ymin = confint_df$lwr,
-      ymax = confint_df$upr,
-      line = list(color = "transparent"),
-      fillcolor = "rgba(0, 100, 255, 0.2)"
+  ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) +
+    geom_point() +
+    stat_smooth(
+      method = "lm",
+      geom = "smooth"
+    ) +
+    labs(
+      title = title,
+      subtitle = paste(
+        "Adj R2 = ", signif(summary(fit)$adj.r.squared, 5),
+        "Intercept =", signif(fit$coef[[1]], 5),
+        " Slope =", signif(fit$coef[[2]], 5),
+        " P =", signif(summary(fit)$coef[2, 4], 5)
+      )
     )
-
-  # Create subtitle with summary statistics
-  subtitle <- paste(
-    "Adj R2 =", signif(summary(fit)$adj.r.squared, 5),
-    ", Intercept =", signif(fit$coef[[1]], 5),
-    ", Slope =", signif(fit$coef[[2]], 5),
-    ", P =", signif(summary(fit)$coef[2, 4], 5)
-  )
-
-  # Add layout with combined title and subtitle
-  p <- p %>%
-    layout(
-      title = list(
-        text = paste0(title, "<br><sup>", subtitle, "</sup>"),
-        font = list(size = 16)
-      ),
-      plot_bgcolor = "#2c2c2c",
-      paper_bgcolor = "#2c2c2c",
-      font = list(color = "#ffffff"),
-      xaxis = list(title = x_var, color = "#ffffff"),
-      yaxis = list(title = y_var, color = "#ffffff")
-    )
-
-  return(p)
 }
 ```
 
 ```{r}
 qqTest <- function(data, sample, title = "title", facet_var = NULL) {
-    require(tidyverse)
+  require(tidyverse)
 
-    gg <- ggplot(data,
-        aes(sample = {{ sample }})) +
-        stat_qq() +
-        stat_qq_line(
-            size = 0.8,
-        ) +
-        labs(
-            title = title,
-            x = "Theoretical Quantiles",
-            y = "Sample Quantiles"
-        ) +
-        guides(color = "none")
+  gg <- ggplot(
+    data,
+    aes(sample = {{ sample }})
+  ) +
+    stat_qq() +
+    stat_qq_line(
+      size = 0.8,
+    ) +
+    labs(
+      title = title,
+      x = "Theoretical Quantiles",
+      y = "Sample Quantiles"
+    ) +
+    guides(color = "none")
 
-    if (!is.null(facet_var)) {
+  if (!is.null(facet_var)) {
+    # Extract colors from facet_var variable
+    colors <- pull(data, {{ facet_var }})
 
-        # Extract colors from facet_var variable
-        colors <- pull(data, {{ facet_var }})
+    gg <- gg + aes(color = factor(colors)) + facet_wrap(as.formula(paste("~", facet_var)))
+  }
 
-        gg <- gg + aes(color = factor(colors)) + facet_wrap(as.formula(paste("~", facet_var)))
-    }
-
-    return(gg)
+  return(gg)
 }
-
 ```
 
 ```{r}
-#density plots with optional grouping variable
-#can be faceted or together by specifying either group or color
-#usage: density.dodge(data, sample, group = "group" (optional), color = "NULL" (optional), title = "title" (optional) )
+# density plots with optional grouping variable
+# can be faceted or together by specifying either group or color
+# usage: density.dodge(data, sample, group = "group" (optional), color = "NULL" (optional), title = "title" (optional) )
 ggDensity <- function(data, sample, group = NULL, color = NULL, title = "Insert Title") {
-
   require(ggplot2)
 
   plot <- ggplot(data, aes(x = {{ sample }})) +
@@ -198,7 +161,6 @@ ggDensity <- function(data, sample, group = NULL, color = NULL, title = "Insert 
     )
 
   if (!is.null(group)) {
-
     colors <- pull(data, {{ group }})
 
     plot <- plot + aes(color = factor(colors)) +
@@ -207,7 +169,6 @@ ggDensity <- function(data, sample, group = NULL, color = NULL, title = "Insert 
   }
 
   if (!is.null(color)) {
-
     colors <- pull(data, {{ color }})
 
     plot <- plot + aes(fill = factor(colors), color = factor(colors), alpha = 0.02) +
@@ -230,15 +191,15 @@ We will use these data to model the relationship between toluene exposure and bl
 ```{r, message = FALSE, warning = FALSE}
 setwd("Lab2")
 
-#reading data and making factor variable for snout size
+# reading data and making factor variable for snout size
 data <- read_csv("hwdata2.csv") %>%
-    mutate(
-      snout_f = factor(snoutsize - 1,
-        levels = c(0, 1),
-        labels = c("short", "long")),
-      snoutsize = as.factor(snoutsize))
-
-
+  mutate(
+    snout_f = factor(snoutsize - 1,
+      levels = c(0, 1),
+      labels = c("short", "long")
+    ),
+    snoutsize = as.factor(snoutsize)
+  )
 ```
 
 
@@ -262,97 +223,183 @@ weightplot <- ggDensity(data, weight, color = "snout_f", title = "1a. Weight") +
 ageplot <- ggDensity(data, age, color = "snout_f", title = "1b. Age") + geom_vline(aes(xintercept = mean, color = snout_f), data = ageStats, linetype = "dashed")
 bloodplot <- ggDensity(data, bloodtol, color = "snout_f", title = "1c. Blood Toluene (mg/L)") + geom_vline(aes(xintercept = mean, color = snout_f), data = bloodStats, linetype = "dashed")
 newppmplot <- ggDensity(data, newppm, color = "snout_f", title = "1d. Toluene Exposure (ppm)") + geom_vline(aes(xintercept = mean, color = snout_f), data = ppmStats, linetype = "dashed")
+
 grid.arrange(
   weightplot, ageplot, bloodplot, newppmplot,
   nrow = 2, ncol = 2,
   top = "Figure 1. Density Plots of Continuous Variables by Snout Size"
 )
+
 # ggpubr::ggdensity(data, x = "weight", add = "mean", rug = TRUE, color = "snout_f", fill = "snout_f") %>% ggplotly()
-# ggpubr made a very nice looking graph easily, but I just can't give up on the graph functions I spent so long making
 
-grid.arrange(
-  tableGrob(weightStats),
-  tableGrob(ageStats),
-  tableGrob(bloodStats),
-  tableGrob(ppmStats),
-  nrow = 4, ncol = 1,
-  top = "Summary Statistics of Weight, Age, Blood Toluene, and Toluene Exposure (respectively) by Snout Size"
+# pWeight <- ggplotly(weightplot)
+# pAge <- ggplotly(ageplot)
+# pBlood <- ggplotly(bloodplot)
+# pPPM <- ggplotly(newppmplot)
+
+# subplot(pWeight, pAge, pBlood, pPPM, nrows = 2)
+
+skimr::skim(data)
+
+pairs.panels(data[, c("bloodtol", "weight", "age", "newppm")],
+  ellipses = FALSE, density = FALSE, hist.col = "deepskyblue"
 )
-
-# residual plots here
 ```
 
-Comment on any potential problems or trends that you see:
-
+Much of the data appear to be skewed and multimodal, although weight is much less so than the other continuous variables. There were no missing values.
 
 
 # Part 2) SLR
 
-__Fit a regression model for blood toluene (bloodtol) that contains only toluene exposure (newppm) as a predictor and perform a graphical analysis to assess the linearity, equal variance, and normality assumptions of linear regression. Interpret the plots and evaluate if you believe the assumptions are met.__
+__Fit a regression model for blood toluene (bloodtol) that contains only toluene exposure (newppm) as a predictor and perform a graphical analysis to assess the linearity, equal variance, and normality assumptions of linear regression.__
+__Interpret the plots and evaluate if you believe the assumptions are met.__
 
 ```{r}
 # fit slr model
+bloodPPM <- lm(bloodtol ~ newppm, data = data)
 
+ggRegression(bloodPPM, title = "Plot of Blood Toluene by Toluene Exposure (PPM)")
+
+ggResid(bloodPPM)
+
+qqTest(bloodPPM, .stdresid, title = "QQ Test of Residuals")
 
 # plot residual vs fitted and residual qq-plot
 # hint: if you've saved your model above you can use the plot() function and specify which = 1:2 to tell R to only print the first 2 plots
-
 ```
 
-Interpretation of plots/evaluation of assumptions:
+Interpretation of plots/evaluation of assumptions:  
+The plot of the residuals shows a pattern, especially at the beginning, rather than being random-appearing, suggesting potential violation of linearity.
+The spread of residuals also appears to further deviate from the line as the fitted values go up, suggesting possible unequal variance.
+The QQ-plot of the residuals suggests that they may not be normally distributed and have heavy tails.
 
 # Part 3) MLR
 
-__We will now add the other covariates to the model. Assess which variables appear to be important and explicitly test if there is effect modification (interaction) of toluene exposure by weight, age, or snout size.__
+__We will now add the other covariates to the model. Assess which variables appear to be important and explicitly__ 
+__test if there is effect modification (interaction) of toluene exposure by weight, age, or snout size.__
 
 ```{r}
-
 # model with interactions included
-
+full_model <- lm(bloodtol ~ newppm + weight + age + snout_f, data = data)
 # test if the interactions are useful (you can just tun one test to test them all at once)
+summary(full_model)
 
+interaction_model <- lm(bloodtol ~ newppm * weight + newppm * age + newppm * snout_f, data = data)
+summary(interaction_model)
+
+# anova_comparison <- anova(full_model, interaction_model)
+# summary(anova_comparison)
 ```
 
-Comment on important variables and if interactions seem necessary:
+Comment on important variables and if interactions seem necessary:  
+In the full model without interaction terms, newppm and age were identified as statistically significant predictors of blood tol levels, 
+with p-values significantly below the 0.05 threshold, indicating their importance as covariates. 
+However, in the interaction model, none of the interaction terms between newppm and weight, newppm and age, or newppm and snout_flong were statistically significant, 
+as their p-values did not fall below the significance threshold. 
+This suggests that there is insufficient evidence to support the presence of effect modification by these variables on the relationship between toluene exposure (newppm) and blood tol levels.
 
 # Part 4) Collinearity
 
-__Check for collinearity between the 4 covariates (exposure, age, weight, snout size). Are you concerned that collinearity could be affecting our statistical inference in these data?__
+__Check for collinearity between the 4 covariates (exposure, age, weight, snout size).__
+__Are you concerned that collinearity could be affecting our statistical inference in these data?__
 
 ```{r}
 # measure of collinearity in the model involving exposure, weight, age, and snout size
+vif(full_model)
 
+# also testing a model without weight and snout length (just the significant variables from the partial F-test)
+newppmAge <- lm(bloodtol ~ newppm + age, data = data)
+summary(newppmAge)
+vif(newppmAge)
+# their coefficients did not change much
+
+# making a correlation matrix
+cor_matrix <- cor(data[, c("newppm", "weight", "age")], use = "complete.obs")
+
+corrplot(cor_matrix,
+  method = "circle", type = "upper", order = "hclust",
+  tl.col = "black", tl.srt = 45, addCoef.col = "black"
+)
 ```
 
-Interpretation:
-
+**Interpretation:**  
+Despite the results from the full and interaction models (insignificant partial F-tests) from the previous part, the VIF test of the full model returns small values.
+Based on this, there is not enough evidence to conclude that collinearity is significantly affecting our inference.  
+As found earlier in the lab, 
 
 # Part 5) Choose a Model
 
 __Based on your analysis so far, choose the model that you believe is the best. Use this as your final model. Justify why you chose this model and comment on any potential assumption violations in this model (a few residual plots may be helpful for this).__
 
 ```{r}
+# Residual vs. Fitted Plot
+ggplot(full_model, aes(.fitted, .resid)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = "Fitted Values", y = "Residuals", title = "Residual vs. Fitted Plot")
 
+# QQ-plot of residuals
+ggplot(full_model, aes(sample = .stdresid)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "Normal Q-Q Plot")
 
+# scale location plot
+ggplot(full_model, aes(.fitted, sqrt(abs(.stdresid)))) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(x = "Fitted Values", y = "Sqrt(|Standardized Residuals|)", title = "Scale-Location Plot")
 
+# doing a log transform on the full model
+logFull <- lm(log(bloodtol) ~ newppm + weight + age + snout_f, data = data)
+
+# qq-plot
+ggplot(logFull, aes(sample = .stdresid)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "Normal Q-Q Plot (log transform)")
+
+# residuals plot
+ggplot(logFull, aes(.fitted, .resid)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = "Fitted Values", y = "Residuals", title = "Residual vs. Fitted Plot (log transform)")
+
+# scale location plot
+ggplot(logFull, aes(.fitted, sqrt(abs(.stdresid)))) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(x = "Fitted Values", y = "Sqrt(|Standardized Residuals|)", title = "Scale-Location Plot (log transform)")
+
+avPlots(full_model)
 ```
 
 
-Which model did you choose? Why? Are you worried about any assumptions
+**Which model did you choose? Why? Are you worried about any assumptions**  
+Based on my own (hopefully sound) intuition, as well as the results from the VIF tests, I have decided to go with the full model including all covariates.  
+I believe it intuitively makes sense that age and weight would play a role in how much toluene is in the bloodstream, and snout size could be important as to how much actually gets absorbed into the body.  
+I also believe it makes intuitive sense that none of these variables would have much of heavy influence on each other or be strongly correlated.  
+It is concerning that the residuals have a pattern in the plot corresponding with the newppm variable, as this is the most important factor in blood toluene levels.
+While similar to the residuals qq-plot in the model just including newppm, the plot using the full model appears very slightly more normal than the former.
+All of this could indicate a potential non-linear relationship requiring transformation. A log transform on blood toluene indeed shows more normal residuals,
+but it also shows a much less horizontal line in the scale-location plot.
 
 # Part 6) Identifying Influential or Outlier Points
 
-__Based on the model you chose in part 5, identify poorly fit, high leverage points, and/or influential points in your model. Comment on how you identified these particular points (based on which metric(s)?).__ 
+__Based on the model you chose in part 5, identify poorly fit, high leverage points, and/or influential points in your model.__
+__Comment on how you identified these particular points (based on which metric(s)?).__ 
 
 
 ```{r}
-
 # the influence index plotting functions from the `car` (such as influenceIndexPlot()) may be useful to spot these points
-
+influenceIndexPlot(full_model)
 ```
 
 
 Points identified and why: 
+Even originally from just look at the added-variable (AV) plots, points 33 and 55 specifically appear to be influential outliers. This is also seen in the Cook's Distance plot.
+On the weight AV plot, points **27 and 11** appear to be particularly high leverage, which is verified by the hat values plot.
+Based on all of this, there is evidence to suggest that points **33 and 55**, specifically, are very anomalous, possibly due to measurement error. 
 
 
 # Part 7) Sensitivity to Outliers/Influential Points
@@ -362,15 +409,37 @@ __Perform a sensitivity analysis by refitting the model excluding the troublesom
 ```{r}
 # fit model removing outlier/influential points
 # you can create a new data frame with the points remove or input the filtering in the lm() function
-# for examplem if I wanted to remove the second and tenth rows I could run: lm(y ~ x1 + x2, data = mydata %>% slice(-c(2,10))) 
+# for examplem if I wanted to remove the second and tenth rows I could run: lm(y ~ x1 + x2, data = mydata %>% slice(-c(2,10)))
 # the slice() function grabs or removes (if included with a `-` sign) rows by their index
+dataClean <- data %>%
+  slice(-c(11, 27, 33, 55))
 
-# compare the two models
+modelClean <- lm(bloodtol ~ newppm + weight + age + snout_f, data = dataClean)
 
- 
+# showing results
+summary(modelClean)
+avPlots(modelClean)
+
+influencePlot(full_model)
+influencePlot(modelClean)
+
+# comparing the two models
+glance_full <- broom::glance(full_model)
+glance_filtered <- broom::glance(modelClean)
+
+# Comparing coefficients of the models
+tidy_full <- broom::tidy(full_model)
+tidy_filtered <- broom::tidy(modelClean)
+
+glance_comparison <- bind_rows(glance_full, glance_filtered)
+tidy_comparison <- bind_rows(tidy_full, tidy_filtered)
+
+knitr::kable(glance_comparison)
+knitr::kable(tidy_comparison)
 ```
  
-
+The new model with the troublesome points removed has a higher adjusted R2 **(0.88 vs 0.76)** and very different coefficients for weight and snout size, to the point that they change direction.
+Sigma decreased in the filteread model as well. All this indicates that the model was indeed very sensitive to these points.
 
 # Part 8)	Robust Regression
 
@@ -378,31 +447,56 @@ __Fit a robust regression using the model you chose in part 5 and compare the tw
 
 ```{r}
 # fit robust regression model (rlm() funciton from `MASS` package)
+modelRobust <- rlm(bloodtol ~ newppm + weight + age + snout_f, data = data)
 
+# showing summaries of the two models again
+summary(modelRobust)
+summary(full_model)
+
+coeff_full <- summary(full_model)$coefficients
+coeff_robust <- summary(modelRobust)$coefficients
+
+# making data.frame comparing the results
+comparison_df <- data.frame(
+  Term = rownames(coeff_full),
+  Full_Model_Estimate = coeff_full[, "Estimate"],
+  Robust_Model_Estimate = coeff_robust[, "Value"],
+  Difference = coeff_full[, "Estimate"] - coeff_robust[, "Value"]
+)
+
+knitr::kable(comparison_df)
 ```
 
+From this comparison, we can see that:
 
+The intercept has a large difference, which indicates that the baseline level predicted by the two models varies considerably.  
+The coefficient for **newppm is slightly higher in the robust model**, but the difference is relatively small.  
+The **weight coefficient changes sign** between the two models, which could indicate that this variable's influence is quite sensitive to outliers or leverage points.  
+The **age coefficient is about half** in the robust model compared to the full model, suggesting that the effect of age is less pronounced when the influence of outliers is mitigated.  
+The **snout_flong coefficient has the most significant change in magnitude**, showing a drastic reduction in the robust model, which implies that the full model's estimate for this term may be highly influenced by outliers.  
+  
+Based on all of this, and considering our previous statement of the outliers being likely anomalies due to e.g. measurement error, the robust model may be more appropriate here as it reduces the impact of these outliers.
 
 # Part 9) Data Transformations
 
 __Based on what you saw in your descriptives from part 1 and the residual plots from your final model would a data transformation be appropriate?  If so which one?  (no need to transform, just comment).__
 
-
+I believe a data transformation would be appropriate. As was seen earlier, the residuals do not seem to be randomly scattered around the horizontal line in the residual vs fitted plot and, instead, show some pattern(s).
+This could help more clearly satisfy the assumptions of linear regression.
+Additionally, using transformations could mitigate the effect of some of the outliers, making the non-robust model more appropriate to use.
 
 
 
 # Part 10) Summary
 
-__Summarize your findings from parts 1-9 (model chosen, trends found using said model, possible multicollinearity, sensitivity to outliers/influential points, etc.)__
+__Summarize your findings from parts 1-9__ 
+__(model chosen, trends found using said model, possible multicollinearity, sensitivity to outliers/influential points, etc.)__
 
-
-
-
-
+The model that we chose involved using all the covariates based on intuition that they all probably have an effect on the outcome and that they showed no strong signs of collinearity.
+The model showed sensitivity to outliers, causing us to choose a robust regression model as the likely more appropriate model.
+In the robust and non-robust models, some of the variables drastically differed, as seen in the table in part 8.
 
 
 ```{r}
-
 sessionInfo()
-
 ```
