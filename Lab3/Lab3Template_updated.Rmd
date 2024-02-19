@@ -1,22 +1,24 @@
 ---
 title: "M3 Lab"
-author: "YOUR NAME HERE"
+author: "Matthew Præstgaard"
 date: "Spring 2024"
 output:
-  html_document:
-    df_print: paged
-    toc: true
-    toc_depth: '3'
-    code_folding: show
+  rmdformats::downcute:
+    self_contained: true
+    default_style: "dark"
+    downcute_theme: "default"
+    code_folding: "show"
+  svglite:
+    fig.retina: 2
 ---
 
-```{r,echo=FALSE,message=FALSE,warning=FALSE}
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
 require(knitr)
 # this line of code is added so that the file can be knitted even when error messages are produced by your code
-knitr::opts_chunk$set(error = T)
+knitr::opts_chunk$set(error = TRUE)
 ```
 
-```{r}
+```{r, message = FALSE}
 
 library(tidyverse)
 library(here)
@@ -28,8 +30,36 @@ library(splines)
 library(readxl)
 library(glmnet)
 library(olsrr)
+library(jtools)
+library(ggthemr)
+  ggthemr("flat dark")
+library(plotly)
 
+```
 
+```{r}
+# ggplotRegression
+# use to plot linear model with summary statistics and error
+# Usage: ggplotRegression(data)
+ggRegression <- function(fit, title = "title") {
+  require(ggplot2)
+
+  ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) +
+    geom_point() +
+    stat_smooth(
+      method = "lm",
+      geom = "smooth"
+    ) +
+    labs(
+      title = title,
+      subtitle = paste(
+        "Adj R2 = ", signif(summary(fit)$adj.r.squared, 5),
+        "Intercept =", signif(fit$coef[[1]], 5),
+        " Slope =", signif(fit$coef[[2]], 5),
+        " P =", signif(summary(fit)$coef[2, 4], 5)
+      )
+    )
+}
 ```
 
 # Part 1: Blood Toluene
@@ -39,15 +69,30 @@ We will continue using the same data from the module 2 lab for the first part of
 
 From last time: 
 
-The following data come from a study of the impacts of toluene exposure through inhalation on toluene concentration in the blood. In the study, 60 rats were exposed to differing levels of toluene inhalation, from 11.34 to 1744.7 parts per million (ppm) (newppm) for a duration of 3 hours. Blood levels were measured (bloodtol) following exposure measured in mg/L. Other variables measured were weight in grams (weight), age in days (age), and snout size as either short (snoutsize=1) or long (snoutsize=2).
+The following data come from a study of the impacts of toluene exposure through inhalation on toluene concentration in the blood.
+In the study, 60 rats were exposed to differing levels of toluene inhalation,
+from 11.34 to 1744.7 parts per million (ppm) (newppm) for a duration of 3 hours.
+Blood levels were measured (bloodtol) following exposure measured in mg/L.
+Other variables measured were weight in grams (weight), age in days (age), and snout size as either short (snoutsize=1) or long (snoutsize=2).
 
 We will use these data to model the relationship between toluene exposure and blood concentration, possibly adjusting for other variables.
 
 
 
-```{r}
+```{r, message = FALSE}
 # read in data for part 1 (blood toluene data, same as lab 2)
+here(".lintr")
 
+data <- read_csv(here("Lab3", "hwdata2.csv")) %>%
+  mutate(
+    snout_f = factor(snoutsize - 1,
+      levels = c(0, 1),
+      labels = c("short", "long")
+    ),
+    snoutsize = as.factor(snoutsize)
+  )
+
+kable(summary(data))
 ```
 
 
@@ -55,13 +100,18 @@ We will use these data to model the relationship between toluene exposure and bl
 
 __Fit a simple linear model with bloodtol as the dependent variable and just newppm as the independent variable. Create a components plus residuals plot for this model. Do you notice anything problematic in this plot?__
 
-```{r}
+```{r, warning = FALSE}
 # linear model
+lmTolPPM <- lm(bloodtol ~ newppm, data = data)
 
+jtools::summ(lmTolPPM)
 
 # C+R plot
-
-
+pairs.panels(data[, c("bloodtol", "newppm")],
+  ellipses = FALSE, density = FALSE, hist.col = "deepskyblue"
+)
+crPlots(lmTolPPM)
+ggRegression(lmTolPPM, title = "Plot of Blood Toluene by Toluene Exposure (ppm)") %>% ggplotly()
 ```
 
 Comment on plot:
