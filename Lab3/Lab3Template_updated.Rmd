@@ -149,6 +149,17 @@ __Try three different values of span (the parameter that controls how smooth the
 
 ```{r}
 # loess curve plot
+ggplot(data, aes(x = bloodtol, y = newppm)) +
+  geom_point()
+  geom_smooth(method = "loess", span = 0.5)
+
+ggplot(data, aes(x = bloodtol, y = newppm)) +
+  geom_point()
+  geom_smooth(method = "loess", span = 0.75)
+
+ggplot(data, aes(x = bloodtol, y = newppm)) +
+  geom_point()
+  geom_smooth(method = "loess", span = 2)
 # recall that you can use geom_smooth(method = "loess", span = __) to get a loess curve over a scatterplot (made with geom_point() in ggplot)
 ```
 
@@ -165,13 +176,17 @@ __Use marginal coefficients for the spline terms in this model. Make a plot show
 # recall that you can use
 # geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(knot1, knot2, etc...)))
 # reminder that here we don't acually substitutde in variable names for x and y (they're taken from the x and y variables oyu define in the main aes() arguments when you made your ggplot plot)
-
+ggplot(data, aes( x= newppm, y = bloodtol)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(125, 375, 625)))
 
 
 # fit linear spline model with marginal coefficients
 # reminder: syntax to make linear splines using `lspline` package is
 # lspline(variable_name, knots = c(knot1, knot2, ...), marginal = T/F)
-
+ggplot(data, aes( x= newppm, y = bloodtol)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(125, 375, 625), marginal = TRUE))
 
 # show output
 ```
@@ -182,7 +197,9 @@ __Fit a second model without marginal coefficients. What do you notice about the
 
 ```{r}
 # linear splines without marginal = T (with marginal = F)
-
+ggplot(data, aes( x= newppm, y = bloodtol)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(125, 375, 625), marginal = FALSE))
 
 # show output
 ```
