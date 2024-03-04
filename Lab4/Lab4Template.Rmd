@@ -1,0 +1,303 @@
+---
+title: "Lab 4 Template"
+author: "YOUR NAME HERE"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(error = TRUE)
+```
+
+
+
+
+# Lab Setup
+
+## R packages
+
+Load necessary packages. 
+
+```{r}
+library(tidyverse)
+library(here)
+library(lmtest)
+library(glmtoolbox)
+library(car)
+
+```
+
+## Data management
+
+
+The following data come from the SEER cancer registry. We are interested in studying early mortality (defined as death within 2 months of cancer diagnosis) and potential risk factors. Notice there are some missing values in the residency and income variables, make sure to drop the missing values from the data so each model is fit using the same data.
+
+
+```{r}
+
+# read in data
+# I've included code to turn sex and race into factor variables for you
+
+seer <- read_csv(here("Lab4", "seer2016.csv")) %>%
+  mutate(race = factor(race, levels= c(0,1,2,3,99),
+                       labels = c("White","Black", "American Indian/Alaska Native","Asian or Pacific Islander", "Unknown")),
+         sex = factor(sex, levels = c(0,1),
+                      labels = c("Male","Female"))) %>%
+  drop_na() #dropping NAs
+```
+
+# Data Analysis
+
+## 1. Contingency table
+
+__Make a contingency table showing the breakdown of early mortality by primary cancer site (use the grouped variable, grouped_primary). Make the contingency table that shows the raw counts and a second that shows the proportion of early mortality vs not early mortality within each primary cancer site.__
+
+
+```{r}
+
+# table of counts
+
+
+# table of proportions by cancer site
+
+
+
+```
+
+## 2. Odds and odds ratios (table based)
+
+__Using this table calculate the odds of early mortality for people with bladder cancer, the odds of early mortality for people with breast cancer, and the odds ratio for early mortality comparing breast cancer to bladder cancer. Which group has the higher odds of early mortality, people with primary breast cancer or bladder cancer?__
+
+```{r}
+
+# odds for bladder cancer
+
+
+# odds for breast cancer
+
+
+# odds ratio
+
+
+```
+
+Odds for breast cancer:
+
+Odds for bladder cancer:
+
+Odds ratio:
+
+
+## 3. Logistic regression model (single predictor)
+
+__Fit a logistic regression model using just primary cancer site (grouped_primary) as the sole predictor. Show the model output. Interpret the intercept and first coefficient (coefficient for breast cancer) in this model.__
+
+
+```{r}
+
+# recall to fit a logistic regression model we use glm(y ~ x1 + x2 + ..., data = data_name, family = binomial(link="logit"))
+
+# fit logistic regression model
+
+# print output
+
+
+```
+
+Interpretation:
+
+Intercept:
+
+Coefficient for breast cancer:
+
+
+## 4. Odds and odds ratios (model based)
+
+__Based on the model you fit above, estimate the odds of early mortality for people with bladder cancer, for people with breast cancer, and the odds ratio for early mortality comparing breast cancer to bladder cancer. How do these compare to the answers you got in part 2? __
+
+```{r}
+
+# odds for bladder cancer
+
+
+# odds for breast cancer
+
+
+# odds ratio
+
+
+```
+
+Odds for breast cancer:
+
+Odds for bladder cancer:
+
+Odds ratio:
+
+
+
+## 5. Logistic regression model (multiple predictors)
+
+__Now, in addition to primary cancer site, add sex, race, age, residency category, and income category to the model. Show the model output.__
+
+```{r}
+
+# fit model
+
+
+# print model output
+
+
+```
+
+## 6. Interpret coefficients
+
+__Interpret the intercept and the coefficient associated with primary breast cancer (grouped_primary = breast) in this model (from part 5).__
+
+Intercept:    
+
+Coefficient for breast cancer: 
+
+## 7. Predicted value
+
+__Using the model, estimate the probability of early mortality for a person with primary lung cancer who is male, Black, 60 years old, lives in an Urban area, and makes at least $65k a year.__
+
+
+```{r}
+
+# calculate predicted probability (note: this is different from the odds)
+
+```
+
+
+
+## 8. Confidence intervals
+
+__Construct 95% confidence intervals on the log-odds scale and on the odds scale for all coefficients in the model (from part 5).__
+
+*Note: the code here might take a few seconds to run*
+
+```{r}
+
+# log scale
+
+
+# odds scale
+
+
+```
+
+
+
+## 9.  Interactions
+
+__Add an interaction between sex and income category. Interpret the coefficient for this term in the model. What does it mean if it is positive?__
+
+```{r}
+
+# fit model with interaction
+
+
+```
+
+Interpretation:
+
+
+## 10. Hypothesis Tests
+
+__Test for effect modification of income by sex (the interaction specified above) using both the Wald test statistic and likelihood ratio test. Interpret your results.__
+
+```{r}
+
+# likelihood ratio test
+
+
+# wald test
+
+
+```
+
+Interpretation:
+
+## 11. Comparing Model Fit Metrics
+
+__Compare the deviance-based adjusted R-squared, deviance, AIC, and BIC values for each of the three models we have fit so far (only primary cancer site, all main effects, and all main effects plus interaction). Which model seems to perform the best based on these metrics? Use the model you think is best for the remainder of the lab.__
+
+
+```{r}
+
+# metrics of model fit
+
+
+
+```
+
+
+Interpretation and model choice:
+
+
+## 12. Collinearity
+
+__Check for collinearity in the model. Do you think collinearity is an issue in the model you chose?__
+
+
+```{r}
+
+# check for collinearity
+
+```
+
+Interpretation:
+
+## 13. Linearity
+
+__Do you think non-linearity could be an issue in the model you chose? Assess this visually and interpret what you see.__
+
+
+```{r}
+
+# check for nonlinearity (hint: you don't need to do this for categorical variables )
+
+```
+
+Interpretation:
+
+## 14. Leverage and influential points
+
+__Assess if there are any high leverage or influential points in the model.__
+
+```{r}
+
+# check metrics of leverage and influence 
+
+
+
+```
+
+Interpretation:
+
+## 15. Hosmer-Lemeshow
+
+__Test if the model appears to fit well to the data. Interpret your results.__
+
+```{r}
+
+# test for goodness of fit
+
+
+```
+
+
+Interpretation:
+
+
+```{r}
+
+sessionInfo()
+
+```
