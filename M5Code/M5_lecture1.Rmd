@@ -1,0 +1,221 @@
+---
+title: 'Module 5 Lecture Code: Part I'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Lecture 1
+
+## R packages
+
+Load necessary packages. 
+
+
+```{r}
+library(tidyverse)
+library(here)
+library(pROC)
+library(caret)
+library(glmnet)
+```
+
+## Load in Data
+
+```{r}
+i_am("Notes/Module 5/M5_lecture1.Rmd")
+
+
+# read data from website (has all data sets from a textbook)
+saheart <- read.table("https://hastie.su.domains/ElemStatLearn/datasets/SAheart.data", header = TRUE, sep = ",") %>% 
+  select(-1) # I'm removing the first column "row.names" just patient id #
+
+```
+
+
+```{r}
+
+# table of counts
+xtabs( ~ chd, data = saheart)
+
+# fit model with all predictors
+fit <- glm(chd ~ ., data = saheart, family = binomial(link = "logit"))
+
+summary(fit)
+
+# calculate phat with formula (inverse logit)
+log_odds = predict(fit)
+phat1 = exp(log_odds)/(1+exp(log_odds))
+
+# calculate phat with predict function
+phat = predict(fit, type = "response")
+
+# check that they're the same
+head(phat1, 4) ; head(phat, 4)
+
+
+```
+
+
+## Classification
+
+
+```{r}
+# outcome vector
+y = fit$y
+
+# set threshold for classifying a "yes" as phat = 0.5
+thresh1 = 0.5
+# get predictions
+yhat1 = as.numeric(phat > thresh1) 
+# confusion matrix
+data.frame(predicted = yhat1, observed = y) %>%
+  xtabs(~ predicted + observed, data = .)
+
+# sensitivity and specificity
+83/(77+83) ; 256/(46+256)
+
+#--------------------------------------------------------------
+
+# set threshold for classifying a "yes" as phat = 0.3
+thresh2 = 0.3
+# get predictions
+yhat2 = as.numeric(phat > thresh2) 
+# confusion matrix
+data.frame(predicted = yhat2, observed = y) %>%
+  xtabs(~ predicted + observed, data = .)
+
+# sensitivity and specificity
+127/(127+33) ; 190/(190+112)
+
+#--------------------------------------------------------------
+
+# set threshold for classifying a "yes" as phat = 0.7
+thresh3 = 0.7
+# get predictions
+yhat3 = as.numeric(phat > thresh3) 
+# confusion matrix
+data.frame(predicted = yhat3, observed = y) %>%
+  xtabs(~ predicted + observed, data = .)
+
+# sensitivity and specificity
+38/(122+38) ; 294/(294+8)
+
+```
+
+## ROC Curve and AUC
+
+```{r}
+
+# roc function from `pROC` package
+# needs predicted probabilities and observed outcomes
+
+# outcome vector
+y_obs = fit$y
+# calculate phat with predict function
+phat = predict(fit, type = "response")
+
+# make roc curve
+roc_curve = roc(response = y_obs, predictor = phat)
+
+# plot
+plot(roc_curve, main = "ROC Curve for CHD", col = "blue")
+
+# print the auc value
+auc(roc_curve)
+
+
+```
+
+
+## Cross-Validated AUC
+
+```{r}
+set.seed(123)
+# using caret package for cross-validation
+library(caret)
+
+ctrl <- trainControl(method = "cv", # cross-validation
+                     number = 10,  # 10-fold
+                     summaryFunction = twoClassSummary, # indicates we have binary outcome
+                     savePredictions = T, # need to save values for AUC to be calculated
+                     classProbs = T) # need to keep predicted probabilities rather than predicted classes (just 0 and 1) for AUC calculation
+
+# caret package wants a factor variable for the outcome
+fitcv <- train(chd ~ ., 
+               data = saheart %>% 
+                 mutate(chd = factor(chd, levels = c(0,1), 
+                                      labels = c("No","Yes"))),
+               trControl = ctrl,
+               method = "glm",
+               family = "binomial",
+               metric = "ROC")
+
+# print output
+fitcv
+
+fitcv$results
+
+
+
+```
+
+## Shrinkage Methods for logistic regression
+
+```{r}
+
+# predictor matrix
+X = model.matrix(fit)[,-1]
+Y = fit$model$chd
+
+# by default, cv.glmnet will use the deviance as the metric of fit (like it uses mse for linear regression)
+# if you want to change this to AUC if you're interested in classification, you can use the argument type.measure
+
+# using AUC as the measure of fit
+# lasso
+lasso.auc = cv.glmnet(x = X, y = Y, nfolds = 10 , 
+                      family = "binomial", alpha = 1, type.measure = "auc")
+
+
+# ridge
+ridge.auc = cv.glmnet(x = X, y = Y, nfolds = 10 , 
+                      family = "binomial", alpha = 0, type.measure = "auc")
+
+
+# elastic net
+enet.auc = cv.glmnet(x = X, y = Y, nfolds = 10 ,
+                      family = "binomial", alpha = 0.5, type.measure = "auc")
+
+# print output
+lasso.auc ; ridge.auc ; enet.auc
+
+# plot for different lambda values
+plot(lasso.auc)
+plot(ridge.auc)
+plot(enet.auc)
+
+# ------------------------------------------------------------------------------
+# default settings (using deviance as measure of fit)
+# lasso
+lasso = cv.glmnet(x = X, y = Y, nfolds = 10 ,
+                  family = "binomial", alpha = 1)
+# ridge
+ridge = cv.glmnet(x = X, y = Y, nfolds = 10 , 
+                  family = "binomial", alpha = 0)
+# elastic net
+enet = cv.glmnet(x = X, y = Y, nfolds = 10 , 
+                  family = "binomial", alpha = 0.5)
+lasso ; ridge ; enet
+
+
+```
+
+
