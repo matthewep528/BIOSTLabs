@@ -1,0 +1,246 @@
+---
+title: 'Module 3 Lecture Code: Part III'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(error = T)
+
+```
+
+```{r}
+
+library(tidyverse)
+library(here)
+library(car)
+library(MASS)
+library(olsrr)
+library(readxl)
+library(glmnet)
+
+```
+
+
+```{r}
+i_am("Notes/Module 3/M3_lecture3.Rmd")
+
+psa = read.delim(here("Notes","Datasets","prostate_cancer.txt"))%>%
+  dplyr::select(-1) %>% dplyr::select(-train)
+
+
+
+```
+
+```{r, eval=F}
+
+psych::pairs.panels(psa, ellipses = F, hist.col = "deepskyblue")
+
+
+```
+
+```{r, eval=T}
+# max model
+maxmodel = lm(lpsa ~ lcavol + lweight + age + lbph + svi + lcp + gleason + pgg45, 
+         data = psa)
+
+
+# from `olsrr` package
+# best subset selection
+best_subset = ols_step_all_possible(maxmodel)
+# gives metrics for all models
+best_subset$result
+
+
+
+
+# forward selection
+# default p-value cutoff for inclusion/exclusion is p_val = 0.3
+forward = ols_step_forward_p(maxmodel)
+# show model metrics for each step
+forward$metrics
+# final model 
+forward$model
+
+# if you want to see the full process, use details = T
+forward = ols_step_forward_p(maxmodel, details = T) 
+# if you know you want to keep age in the model regardless of statistical significance
+forward = ols_step_forward_p(maxmodel, include = "age")
+
+# backward selection
+backward = ols_step_backward_p(maxmodel)
+# final model
+backward$model
+# show metrics
+backward$metrics
+
+
+
+```
+
+```{r}
+# alternative code for aic based forward/backward selection
+backward_aic = stepAIC(maxmodel, direction = "backward", trace = F) # trace =F tells R not to print out every step
+forward_aic = stepAIC(maxmodel, direction = "forward")
+backforward_aic = stepAIC(maxmodel, direction = "both")
+
+```
+
+```{r}
+
+# from `glmnet` package
+# need to give predictors and outcome separately as matrices/vectors
+# look at output of model.matrix function
+head(model.matrix(maxmodel))
+# look at output of `model` component of lm fitted model
+# you could also use this for X below, but model.matrix is better if you have categorical variables
+head(maxmodel$model)
+
+# matrix of predictors
+# (glmnet fits an intercept automatically so don't include second on)
+X = model.matrix(maxmodel)[,-1] # remove first column (column of 1s for intercept)
+# outcome vector
+Y = maxmodel$model$lpsa 
+
+# this gives you different output based on difference choices of lambda
+# how do we pick?
+# dev.ratio gives the R-squared value for these models, so the smallest lambda gives the "best" results 
+lasso = glmnet(y = Y, x = X, family = "gaussian", alpha = 1)
+lasso
+
+# let's try cross-validation to pick a lambda value that gives us better out-of-sample prediction!
+lasso.cv = cv.glmnet(y = Y, x = X, family = "gaussian", alpha = 1)
+# print output
+lasso.cv
+# plot performance across lambda values
+plot(lasso.cv)
+
+
+# grab coefficients from model using lambda that gives minimum prediction error
+coef(lasso.cv, "lambda.min")
+
+# grab coefficients from model using biggest lambda that still gives prediction error within 1 standard error of the minimum
+coef(lasso.cv, "lambda.1se")
+
+# plot change in coefficients over lambda
+plot(lasso.cv$glmnet.fit, xvar = "lambda", label = T)
+
+
+# ridge regression (use same approach but set alpha = 0)
+ridge.cv = cv.glmnet(y = Y, x = X, family = "gaussian", alpha = 0)
+
+# grab coefficients from model using lambda that gives minimum prediction error
+coef(ridge.cv, "lambda.min")
+
+# grab coefficients from model using biggest lambda that still gives prediction error within 1 standard error of the minimum
+coef(ridge.cv, "lambda.1se")
+
+# plot change in coefficients over lambda
+plot(ridge.cv$glmnet.fit, xvar = "lambda", label = T)
+
+
+# elastic net
+# we'll go ahead and just use alpha = 0.5
+# we could try different values of this and see if it changes much if we wanted to, but we'll just stick with alpha = 0.5
+enet.cv = cv.glmnet(y = Y, x = X, family = "gaussian", alpha = 0.5)
+
+# grab coefficients from model using lambda that gives minimum prediction error
+coef(enet.cv, "lambda.min")
+
+# grab coefficients from model using biggest lambda that still gives prediction error within 1 standard error of the minimum
+coef(enet.cv, "lambda.1se")
+
+# plot change in coefficients over lambda
+plot(enet.cv$glmnet.fit, xvar = "lambda", label = T)
+
+# lambda min or 1se?
+# root MSE
+# lambda.min
+enet.cv$cvm[enet.cv$index[1]] %>% sqrt()
+lasso.cv$cvm[lasso.cv$index[1]] %>% sqrt()
+ridge.cv$cvm[ridge.cv$index[1]] %>% sqrt()
+
+# lambda.1se
+enet.cv$cvm[enet.cv$index[2]] %>% sqrt()
+lasso.cv$cvm[lasso.cv$index[2]] %>% sqrt()
+ridge.cv$cvm[ridge.cv$index[2]] %>% sqrt()
+
+# R2
+# lambda.min
+enet.cv$glmnet.fit$dev.ratio[enet.cv$index[1]]
+lasso.cv$glmnet.fit$dev.ratio[lasso.cv$index[1]] 
+ridge.cv$glmnet.fit$dev.ratio[ridge.cv$index[1]] 
+
+# lambda.1se
+enet.cv$glmnet.fit$dev.ratio[enet.cv$index[2]]
+lasso.cv$glmnet.fit$dev.ratio[lasso.cv$index[2]] 
+ridge.cv$glmnet.fit$dev.ratio[ridge.cv$index[2]] 
+
+# we'll go with lambda.min
+# writing my own function to make a table with these metrics
+metrics_glmnet = function(obj, label = NULL){
+  mn = obj$cvm[obj$index]
+  r2 = obj$glmnet.fit$dev.ratio[obj$index]
+  out = data.frame(lambda = c("lambda.min","lambda.1se"),
+                   `Cross-validated MSE` = mn,
+                   `Full data R-squared` = r2) %>%
+    mutate(model = label)
+  return(out)
+}
+
+metrics_glmnet(lasso.cv, "lasso") %>%
+  bind_rows(metrics_glmnet(ridge.cv, "ridge") ) %>%
+  bind_rows(metrics_glmnet(enet.cv, "elastic net") )
+
+```
+
+
+```{r}
+
+# Let's compare!
+lasso.min.coef = as.data.frame.matrix(coef(lasso.cv, "lambda.min")) %>% 
+  set_names("lasso.min")
+ridge.min.coef = as.data.frame.matrix(coef(ridge.cv, "lambda.min")) %>% 
+  set_names("ridge.min")
+enet.min.coef = as.data.frame.matrix(coef(enet.cv, "lambda.min")) %>% 
+  set_names("enet.min")
+forward.coef = as.data.frame(coef(forward$model)) %>% 
+  set_names("forward")
+backward.coef = as.data.frame(coef(backward$model)) %>% 
+  set_names("backward")
+
+# make table with coefficients from all models
+bind_cols(lasso.min.coef, ridge.min.coef, enet.min.coef) %>%
+  rownames_to_column(var = "variable" ) %>%
+  left_join(forward.coef %>% rownames_to_column(var = "variable"), by = "variable") %>%
+left_join(backward.coef %>% rownames_to_column(var = "variable"), by = "variable") 
+
+```
+
+
+```{r}
+# save number of predictors
+p = ncol(X)
+# make a vector to store penalty factors
+penalty = rep(1, times = p)
+# figure out which columns of X hold age and gleason variables
+inds = which(colnames(X) %in% c("age","gleason"))
+# make these penalty values 0 (no shrinkage for these variables)
+penalty[inds] = 0
+# print
+penalty
+
+# if we want to penalize all variables except age and gleason
+lasso.cv2 = cv.glmnet(y = Y, x = X, family = "gaussian", alpha = 1,
+                     penalty.factor = penalty)
+
+coef(lasso.cv2, "lambda.1se")
+
+```
+

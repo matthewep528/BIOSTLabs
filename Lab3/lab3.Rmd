@@ -1,14 +1,18 @@
 ---
 title: "M3 Lab"
-author: "YOUR NAME HERE"
+author: "Matthew Præstgaard"
 date: "Spring 2024"
 output:
-  html_document:
-    df_print: paged
-    toc: true
-    toc_depth: '3'
-    code_folding: show
+  rmdformats::downcute:
+    self_contained: true
+    default_style: "dark"
+    downcute_theme: "default"
+    code_folding: "show"
+  svglite:
+    fig.retina: 2
 ---
+
+# Libraries and Functions
 
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
 require(knitr)
@@ -17,6 +21,7 @@ knitr::opts_chunk$set(error = TRUE)
 
 ```{r, message = FALSE}
 library(tidyverse)
+library(here)
 library(car)
 library(psych)
 library(MASS)
@@ -25,6 +30,9 @@ library(splines)
 library(readxl)
 library(glmnet)
 library(olsrr)
+library(jtools)
+library(ggthemr)
+ggthemr("flat dark")
 ```
 
 ```{r}
@@ -32,23 +40,23 @@ library(olsrr)
 # use to plot linear model with summary statistics and error
 # Usage: ggplotRegression(data)
 ggRegression <- function(fit, title = "title") {
-  require(ggplot2)
+    require(ggplot2)
 
-  ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) +
-    geom_point() +
-    stat_smooth(
-      method = "lm",
-      geom = "smooth"
-    ) +
-    labs(
-      title = title,
-      subtitle = paste(
-        "Adj R2 = ", signif(summary(fit)$adj.r.squared, 5),
-        "Intercept =", signif(fit$coef[[1]], 5),
-        " Slope =", signif(fit$coef[[2]], 5),
-        " P =", signif(summary(fit)$coef[2, 4], 5)
-      )
-    )
+    ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) +
+        geom_point() +
+        stat_smooth(
+            method = "lm",
+            geom = "smooth"
+        ) +
+        labs(
+            title = title,
+            subtitle = paste(
+                "Adj R2 = ", signif(summary(fit)$adj.r.squared, 5),
+                "Intercept =", signif(fit$coef[[1]], 5),
+                " Slope =", signif(fit$coef[[2]], 5),
+                " P =", signif(summary(fit)$coef[2, 4], 5)
+            )
+        )
 }
 ```
 
@@ -58,22 +66,22 @@ ggRegression <- function(fit, title = "title") {
 # ggResid(fit)
 
 ggResid <- function(fit) {
-  # Extract fitted values and residuals from the linear model
-  fitted_values <- fit$fitted.values
-  residuals <- fit$residuals
+    # Extract fitted values and residuals from the linear model
+    fitted_values <- fit$fitted.values
+    residuals <- fit$residuals
 
-  # Create a data frame for the residuals vs. fitted values plot
-  resid_data <- data.frame(Fitted = fitted_values, Residuals = residuals)
+    # Create a data frame for the residuals vs. fitted values plot
+    resid_data <- data.frame(Fitted = fitted_values, Residuals = residuals)
 
-  # Create the plot
-  ggplot(resid_data, aes(x = Fitted, y = Residuals)) +
-    geom_point() +
-    geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
-    labs(
-      title = "Residuals vs. Fitted Values",
-      x = "Fitted Values",
-      y = "Residuals"
-    )
+    # Create the plot
+    ggplot(resid_data, aes(x = Fitted, y = Residuals)) +
+        geom_point() +
+        geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+        labs(
+            title = "Residuals vs. Fitted Values",
+            x = "Fitted Values",
+            y = "Residuals"
+        )
 }
 ```
 
@@ -96,15 +104,16 @@ We will use these data to model the relationship between toluene exposure and bl
 
 ```{r, message = FALSE}
 # read in data for part 1 (blood toluene data, same as lab 2)
+here(".lintr")
 
-data <- read_csv("hwdata2.csv") %>%
-  mutate(
-    snout_f = factor(snoutsize - 1,
-      levels = c(0, 1),
-      labels = c("short", "long")
-    ),
-    snoutsize = as.factor(snoutsize)
-  )
+data <- read_csv(here("Lab3", "hwdata2.csv")) %>%
+    mutate(
+        snout_f = factor(snoutsize - 1,
+            levels = c(0, 1),
+            labels = c("short", "long")
+        ),
+        snoutsize = as.factor(snoutsize)
+    )
 
 kable(summary(data))
 ```
@@ -123,7 +132,7 @@ jtools::summ(lmTolPPM)
 
 # C+R plot
 pairs.panels(data[, c("bloodtol", "newppm")],
-  ellipses = FALSE, density = FALSE, hist.col = "deepskyblue"
+    ellipses = FALSE, density = FALSE, hist.col = "deepskyblue"
 )
 crPlots(lmTolPPM)
 ggRegression(lmTolPPM, title = "Plot of Blood Toluene by Toluene Exposure (ppm)")
@@ -141,25 +150,25 @@ __Try three different values of span (the parameter that controls how smooth the
 ```{r}
 # loess curve plot
 ggplot(data, aes(x = newppm, y = bloodtol)) +
-  geom_point() +
-  geom_smooth(span = 0.5) +
-  labs(
-    title = "LOESS Curve (0.5)"
-  )
+    geom_point() +
+    geom_smooth(span = 0.5) +
+    labs(
+        title = "LOESS Curve (0.5)"
+    )
 
 ggplot(data, aes(x = newppm, y = bloodtol)) +
-  geom_point() +
-  geom_smooth(span = 0.75) +
-  labs(
-    title = "LOESS Curve (0.75)"
-  )
+    geom_point() +
+    geom_smooth(span = 0.75) +
+    labs(
+        title = "LOESS Curve (0.75)"
+    )
 
 ggplot(data, aes(x = newppm, y = bloodtol)) +
-  geom_point() +
-  geom_smooth(span = 2) +
-  labs(
-    title = "LOESS Curve (2)"
-  )
+    geom_point() +
+    geom_smooth(span = 2) +
+    labs(
+        title = "LOESS Curve (2)"
+    )
 # recall that you can use geom_smooth(method = "loess", span = __) to get a loess curve over a scatterplot (made with geom_point() in ggplot)
 ```
 
@@ -180,11 +189,11 @@ __Use marginal coefficients for the spline terms in this model. Make a plot show
 # reminder that here we don't acually substitutde in variable names for x and y
 # (they're taken from the x and y variables oyu define in the main aes() arguments when you made your ggplot plot)
 ggplot(data, aes(x = newppm, y = bloodtol)) +
-  geom_point() +
-  geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(125, 375, 625), marginal = TRUE)) +
-  labs(
-    title = "Linear Spline Plot (knots 125, 375, and 625), marginal = true"
-  )
+    geom_point() +
+    geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(125, 375, 625), marginal = TRUE)) +
+    labs(
+        title = "Linear Spline Plot (knots 125, 375, and 625), marginal = true"
+    )
 
 
 # fit linear spline model with marginal coefficients
@@ -203,11 +212,11 @@ __Fit a second model without marginal coefficients. What do you notice about the
 ```{r}
 # linear splines without marginal = T (with marginal = F)
 ggplot(data, aes(x = newppm, y = bloodtol)) +
-  geom_point() +
-  geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(125, 375, 625), marginal = FALSE)) +
-  labs(
-    title = "Linear Spline Plot (knots 125, 375, and 625), marginal = false"
-  )
+    geom_point() +
+    geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(125, 375, 625), marginal = FALSE)) +
+    labs(
+        title = "Linear Spline Plot (knots 125, 375, and 625), marginal = false"
+    )
 
 tolPPMSpline2 <- lm(bloodtol ~ lspline(newppm, knots = c(125, 375, 625), marginal = FALSE), data = data)
 summ(tolPPMSpline2)
@@ -236,9 +245,9 @@ __Make a plot showing the fit of this model and comment on the fit (visually).__
 # recall that you can use
 # geom_smooth(method = "lm", formula = y ~ ns(x, df = ?))
 ggplot(data, aes(x = newppm, y = bloodtol)) +
-  geom_point() +
-  geom_smooth(method = "lm", formula = y ~ ns(x, df = 5)) +
-  labs(title = "Fit of Natural Spline Model", x = "New PPM", y = "Blood Toluene")
+    geom_point() +
+    geom_smooth(method = "lm", formula = y ~ ns(x, df = 5)) +
+    labs(title = "Fit of Natural Spline Model", x = "New PPM", y = "Blood Toluene")
 
 
 # fit natural spline model with marginal coefficients
@@ -313,7 +322,7 @@ The following data come from the NHANES study. We are interested in estimating f
 
 ```{r}
 # load in data (change as needed to a file path that works on your device)
-nhanes <- read_csv("nhanes_subset.csv")
+nhanes <- read_csv(here("Lab3", "nhanes_subset.csv"))
 ```
 
 ## 1. Full model:
@@ -407,13 +416,13 @@ Note: you don't have to write any code here, just run it so you're working with 
 ```{r}
 # log transforming and dropping un-transformed values
 nhanes <- nhanes %>%
-  mutate(
-    log_creatinine_urine = log(creatinine_urine),
-    log_insulin = log(insulin),
-    log_ferritin = log(ferritin),
-    log_ghb = log(glycohemoglobin)
-  ) %>%
-  dplyr::select(-c(creatinine_urine, insulin, ferritin, glycohemoglobin)) # remove original variables
+    mutate(
+        log_creatinine_urine = log(creatinine_urine),
+        log_insulin = log(insulin),
+        log_ferritin = log(ferritin),
+        log_ghb = log(glycohemoglobin)
+    ) %>%
+    dplyr::select(-c(creatinine_urine, insulin, ferritin, glycohemoglobin)) # remove original variables
 
 # refit model with all predictors
 maxmodel_log <- lm(log_ferritin ~ ., data = nhanes)
@@ -515,3 +524,4 @@ Cross-validation helped us identify which variables could potentially be contrib
 ```{r}
 sessionInfo()
 ```
+

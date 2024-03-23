@@ -1,0 +1,238 @@
+---
+title: 'Module 3 Lecture Code: Part IV (complete)'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(error = T)
+
+```
+
+```{r}
+
+library(tidyverse)
+library(here)
+library(car)
+library(olsrr)
+library(readxl)
+library(glmnet)
+library(lspline)
+library(splines)
+
+```
+
+# Simulated Example
+
+```{r}
+set.seed(1234)
+# sample data
+  x1 = runif(n = 60, min = 5, max = 18)
+  x2 = rnorm(n = 60, mean = 20, sd = 4)
+  x3 = rexp(n = 60)
+  y = 40 + 2*x1 + rnorm(n = 60, sd = 1)
+  df = data.frame(y, x1, x2, x3)
+fit1 <- lm(y ~ x1, data = df)
+fit2 <- lm(y ~ x1 + x2 + x3, data = df)
+
+# pull R squared values for the two variables
+summary(fit1)$r.squared
+summary(fit2)$r.squared
+  
+# simulate new data (10000 new points)
+  x1 = runif(n = 10000, min = 5, max = 18)
+  x2 = rnorm(n = 10000, mean = 20, sd = 4)
+  x3 = rexp(n = 10000)
+  y = 40 + 2*x1 + rnorm(n = 10000, sd = 1)
+  dfi = data.frame(y, x1, x2, x3)
+  pred1 <- predict(fit1, newdata = dfi)
+  pred2 <- predict(fit2, newdata = dfi)
+  mse1 <- mean((y-pred1)^2)
+  mse2 <- mean((y-pred2)^2)
+  sim_results = data.frame(model = c("y ~ x1", "y ~ x1 + x2 + x3"),
+                   mse = c(mse1, mse2))
+
+# MSE for simpler model is better in new data, even though R^2 was higher in sample in the bigger model (overfitting)
+sim_results 
+
+# simple model coefficients
+coef(fit1)
+# complex model coefficients 
+coef(fit2)
+
+
+```
+
+# Gestational Age Example
+
+```{r}
+
+i_am("Notes/Module 3/M3_lecture4.Rmd")
+
+
+ga = read_excel(here("Notes","Datasets","Kenya_heel_17May22.xls")) %>% janitor::clean_names() %>% select(-c(1:2, 58:59, 62:66)) %>%
+  mutate(sample_collection_hrs = as.numeric(sample_collection_hrs)) %>%
+  drop_na()
+
+```
+
+
+
+```{r}
+# initial model with just birthweight, sex, and multiple birth (twins/triplets/etc vs singeltons)
+model1 <- lm(gestage_ref ~ birthweight_g + sex + multiple_birth + birthweight_g:sex + multiple_birth:sex + multiple_birth:birthweight_g, data = ga)
+
+# adding metabolites to the model
+fullmodel = lm(gestage_ref ~ . + birthweight_g:sex + multiple_birth:sex + multiple_birth:birthweight_g, data = ga)
+
+# partial F test
+anova(model1, fullmodel)
+
+# show initial model adjusted r^2
+summary(model1)$adj.r.squared
+# show full model adjusted r^2
+summary(fullmodel)$adj.r.squared
+
+# model metrics
+broom::glance(model1)
+broom::glance(fullmodel)
+
+# check for overfitting
+# if cross-validated MSE is much larger than full-sample MSE, we have evidence of overfitting
+cv::cv(fullmodel)
+
+# matrix of predictors for glmnet functions
+X = model.matrix(fullmodel)[,-1]
+# outcome vector
+Y = fullmodel$model$gestage_ref
+
+# lasso model
+lasso = cv.glmnet( y = Y, x = X,alpha = 1)
+# print output--shows 2 lambda values (min and 1se), cross-validated MSE, # variables with nonzero coefficients
+lasso
+
+# ridge model
+ridge = cv.glmnet( y = Y, x = X,alpha = 0)
+# print output
+ridge
+
+# elastic net 
+enet = cv.glmnet( y = Y, x = X,alpha = 0.5)
+# print output
+enet
+
+# check MSE from these models
+# using lambda.1se
+lasso$cvm[lasso$index[2]]
+ridge$cvm[ridge$index[2]]
+enet$cvm[enet$index[2]]
+
+# R^2 values (not cross-validated)
+# using lambda.1se
+lasso$glmnet$dev.ratio[lasso$index[2]]
+ridge$glmnet$dev.ratio[ridge$index[2]]
+enet$glmnet$dev.ratio[enet$index[2]]
+
+# plot MSEs over different lambda values
+plot(ridge)
+plot(enet)
+
+# check which variables get included
+coef(lasso, "lambda.1se")
+coef(ridge, "lambda.1se")
+coef(enet, "lambda.1se")
+
+# equivalently
+coef(lasso, lasso$lambda[lasso$index[2]])
+coef(ridge, ridge$lambda[ridge$index[2]])
+coef(enet, enet$lambda[enet$index[2]])
+
+
+
+```
+
+# Particulate Matter Example
+
+```{r, warning=F}
+# read in data
+pm25 =read.delim2(here("Notes","Datasets","PA_PM25.txt")) %>%
+  janitor::clean_names() %>%
+  mutate(avg_fine_particulate_matter = as.numeric(avg_fine_particulate_matter)) %>% drop_na()
+
+# plot data with loess curve
+pm25 %>%
+  ggplot(aes(x = day_of_year, y = avg_fine_particulate_matter)) + 
+  geom_point() + 
+  theme_bw() +
+  labs(x = "Day of Year",
+       y = "Average Fine Particulate Matter (PM 2.5)",
+       title = "Particulate Matter in Pennsylvania (2003-2011)") + 
+   geom_smooth(se = F, method = "loess")
+
+# plot by year
+pm25 %>%
+  ggplot(aes(x = day_of_year, y = avg_fine_particulate_matter, color = month)) + 
+  geom_point() + 
+  theme_bw() +
+  labs(x = "Day of Year",
+       y = "Average Fine Particulate Matter (PM 2.5)",
+       title = "Particulate Matter in Pennsylvania (2003-2011)") + 
+   facet_wrap(.~ year)
+
+
+
+
+
+```
+
+
+```{r}
+# linear model
+linfit = lm(avg_fine_particulate_matter ~ day_of_year, data = pm25)
+# residual plots
+# we see the nonlinearity that we saw in the data plot
+plot(linfit, which = 1:2)
+
+# plot to pick number of knots
+# you can try changing df to see how this changes the plot (more knots = more choppiness)
+pm25 %>%
+  ggplot(aes(x = day_of_year, y = avg_fine_particulate_matter)) + 
+  geom_point() + 
+  theme_bw() +
+  labs(x = "Day of Year",
+       y = "Average Fine Particulate Matter (PM 2.5)",
+       title = "Particulate Matter in Pennsylvania (2003-2011)") + 
+  geom_smooth(se=F, formula = y ~ ns(x, df = 4), method = "lm")
+
+# natural spline model
+ns_fit = lm(avg_fine_particulate_matter ~ ns(day_of_year, df = 4), data = pm25)
+
+# residual plots
+# seemed to improve non-linearity, still not perfect
+plot(ns_fit, which = 1:2)
+
+# test for linearity
+anova(linfit, ns_fit)
+
+
+# natural spline fit with year 
+ns_fit2 = lm(avg_fine_particulate_matter ~ ns(day_of_year, df = 4)+year, data = pm25)
+
+
+# add interaction terms
+ns_fit3 = lm(avg_fine_particulate_matter ~ ns(day_of_year, df = 4)*year, data = pm25)
+
+# metrics of model fit (natural spline seems to have helped but the extra year main effect or interactions don't seem to help)
+broom::glance(linfit)
+broom::glance(ns_fit)
+broom::glance(ns_fit2)
+broom::glance(ns_fit3)
+
+
+```

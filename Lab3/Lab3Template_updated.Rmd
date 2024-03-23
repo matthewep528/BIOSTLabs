@@ -12,6 +12,8 @@ output:
     fig.retina: 2
 ---
 
+# Libraries and Functions
+
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
 require(knitr)
 knitr::opts_chunk$set(error = TRUE)
@@ -22,7 +24,6 @@ library(tidyverse)
 library(here)
 library(car)
 library(psych)
-library(plotly)
 library(MASS)
 library(lspline)
 library(splines)
@@ -31,7 +32,7 @@ library(glmnet)
 library(olsrr)
 library(jtools)
 library(ggthemr)
-  ggthemr("flat dark")
+ggthemr("flat dark")
 ```
 
 ```{r}
@@ -39,7 +40,6 @@ library(ggthemr)
 # use to plot linear model with summary statistics and error
 # Usage: ggplotRegression(data)
 ggRegression <- function(fit, title = "title") {
-
   require(ggplot2)
 
   ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) +
@@ -149,21 +149,32 @@ __Try three different values of span (the parameter that controls how smooth the
 
 ```{r}
 # loess curve plot
-ggplot(data, aes(x = bloodtol, y = newppm)) +
-  geom_point()
-  geom_smooth(method = "loess", span = 0.5)
+ggplot(data, aes(x = newppm, y = bloodtol)) +
+  geom_point() +
+  geom_smooth(span = 0.5) +
+  labs(
+    title = "LOESS Curve (0.5)"
+  )
 
-ggplot(data, aes(x = bloodtol, y = newppm)) +
-  geom_point()
-  geom_smooth(method = "loess", span = 0.75)
+ggplot(data, aes(x = newppm, y = bloodtol)) +
+  geom_point() +
+  geom_smooth(span = 0.75) +
+  labs(
+    title = "LOESS Curve (0.75)"
+  )
 
-ggplot(data, aes(x = bloodtol, y = newppm)) +
-  geom_point()
-  geom_smooth(method = "loess", span = 2)
+ggplot(data, aes(x = newppm, y = bloodtol)) +
+  geom_point() +
+  geom_smooth(span = 2) +
+  labs(
+    title = "LOESS Curve (2)"
+  )
 # recall that you can use geom_smooth(method = "loess", span = __) to get a loess curve over a scatterplot (made with geom_point() in ggplot)
 ```
 
 Comment on what you see:
+Especially in the span = 0.5 plot, blood toluene appears to be level for a bit before rising rapidly, leveling off,
+rising again, and slightly dropping/levelling again at higher values of newppm.
 
 ## 3. Linear spline model
 
@@ -175,18 +186,21 @@ __Use marginal coefficients for the spline terms in this model. Make a plot show
 # linear spline plot
 # recall that you can use
 # geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(knot1, knot2, etc...)))
-# reminder that here we don't acually substitutde in variable names for x and y (they're taken from the x and y variables oyu define in the main aes() arguments when you made your ggplot plot)
-ggplot(data, aes( x= newppm, y = bloodtol)) +
+# reminder that here we don't acually substitutde in variable names for x and y
+# (they're taken from the x and y variables oyu define in the main aes() arguments when you made your ggplot plot)
+ggplot(data, aes(x = newppm, y = bloodtol)) +
   geom_point() +
-  geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(125, 375, 625)))
+  geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(125, 375, 625), marginal = TRUE)) +
+  labs(
+    title = "Linear Spline Plot (knots 125, 375, and 625), marginal = true"
+  )
 
 
 # fit linear spline model with marginal coefficients
 # reminder: syntax to make linear splines using `lspline` package is
 # lspline(variable_name, knots = c(knot1, knot2, ...), marginal = T/F)
-ggplot(data, aes( x= newppm, y = bloodtol)) +
-  geom_point() +
-  geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(125, 375, 625), marginal = TRUE))
+tolPPMSpline1 <- lm(bloodtol ~ lspline(newppm, knots = c(125, 375, 625), marginal = TRUE), data = data)
+summ(tolPPMSpline1)
 
 # show output
 ```
@@ -197,44 +211,59 @@ __Fit a second model without marginal coefficients. What do you notice about the
 
 ```{r}
 # linear splines without marginal = T (with marginal = F)
-ggplot(data, aes( x= newppm, y = bloodtol)) +
+ggplot(data, aes(x = newppm, y = bloodtol)) +
   geom_point() +
-  geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(125, 375, 625), marginal = FALSE))
+  geom_smooth(method = "lm", formula = y ~ lspline(x, knots = c(125, 375, 625), marginal = FALSE)) +
+  labs(
+    title = "Linear Spline Plot (knots 125, 375, and 625), marginal = false"
+  )
 
-# show output
+tolPPMSpline2 <- lm(bloodtol ~ lspline(newppm, knots = c(125, 375, 625), marginal = FALSE), data = data)
+summ(tolPPMSpline2)
 ```
 
-Compare the output from the two models
+The marginal model shows cumulative effects: the second segment coefficient decreases (-0.05488), and the third increases (0.06800),
+with a sharp decrease in the fourth (-0.10376). The non-marginal model, focusing on segment-specific changes,
+shows a more gradual increase in the second (0.01796) and third segments (0.08597), with a milder decrease in the fourth (-0.01779). 
+
+Both models have an R-squared of 0.82, showing a good fit. 
 
 ## 5. Estimating slope at a particualr point
 
-__Based on either of the spline models above, what is the estimated slope when the newppm value is 300 (newppm = 300)?__
 
-Answer here: 
+__Based on either of the spline models above, what is the estimated slope when the newppm value is 300 (newppm = 300)?__  
+
+Answer here: **13.81767**  
 
 ## 6. Natural splines
 
-__Fit a model with natural splines with 4 knots (you can let R pick the location of the knots by creating natural splines with 5 degrees of freedom). Make a plot showing the fit of this model and comment on the fit (visually).__
+__Fit a model with natural splines with 4 knots (you can let R pick the location of the knots by creating natural splines with 5 degrees of freedom).__
+__Make a plot showing the fit of this model and comment on the fit (visually).__
 
 ```{r}
 # natural spline plot
 # recall that you can use
 # geom_smooth(method = "lm", formula = y ~ ns(x, df = ?))
-
-
+ggplot(data, aes(x = newppm, y = bloodtol)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ ns(x, df = 5)) +
+  labs(title = "Fit of Natural Spline Model", x = "New PPM", y = "Blood Toluene")
 
 
 # fit natural spline model with marginal coefficients
 # reminder: syntax to make natural splines using `splines` package is
 # ns(variable_name, df = # knots + 1)
 # you could also specify the location of the knots, but specifying df lets R choose them for you
-
-
+nSpline <- lm(bloodtol ~ ns(newppm, df = 5), data = data)
 
 # model output
+summ(nSpline)
 ```
 
 Comment on the fit of the model:
+The adjusted R2 of 0.81 shows a very good fit.
+The coefficients for the spline terms ns(newppm, df=5)3, ns(newppm, df=5)4, and ns(newppm, df=5)5 are statistically significant,
+suggesting that these spline components meaningfully contribute to modeling the relationship between newppm and bloodtol. 
 
 ## 7. Residual plots for the models fit so far
 
@@ -242,15 +271,17 @@ __Make residual plots for each of the models (you can just choose one parameteri
 
 ```{r}
 # plots for linear model
-
+ggResid(lmTolPPM)
 
 # plots for linear spline model
-
+ggResid(tolPPMSpline1)
 
 # plots for natural spline model
+ggResid(nSpline)
 ```
 
-Comments: 
+Comments:
+The plots all show signs of patterns in the residuals, but the second and third plots show more randomness in the distribution of residuals than the first.
 
 ## 8. Test for linearity
 
@@ -258,25 +289,30 @@ __Using the linear spline and natural spline models, run tests for linearity. Do
 
 ```{r}
 # test for linearity (linear spline model)
-
+anova(lmTolPPM, tolPPMSpline1)
 # test for linearity (natural spline model)
+anova(lmTolPPM, nSpline)
 ```
 
 Interpretation of output:
-
+The ANOVA results for both the linear spline model and the natural spline model compared to the linear model show highly significant p-values (***), indicating strong evidence against the null hypothesis of linearity.
+This suggests that both spline models provide a significantly better fit to the data than the linear model, indicating the presence of non-linearity
 
 
 ## 9. Model fit based on various metrics
 
-__Compare the fits of the linear, linear spline, and natural spline models. In particular, compare the $R^2$/adjusted $R^2$ values, mean squared errors, AICs, and BICs. Which do you prefer? Justify your answer.__
-
+__Compare the fits of the linear, linear spline, and natural spline models.__
+__In particular, compare the $R^2$/adjusted $R^2$ values, mean squared errors, AICs, and BICs. Which do you prefer? Justify your answer.__
 
 ```{r}
-# model fit metrics
-# you can do this a few ways but the glance() function from the `broom` package is a nice way to get lots of these metrics all with one function
+summ(lmTolPPM)
+summ(tolPPMSpline1)
+summ(nSpline)
 ```
 
 Comparison and your preference:
+The spline models both show a better fit based on the adjusted R2 values. Based on this, I prefer the linear spline model as it is simpler than the natural spline model (fewer knots),
+which, I believe, would be good in order to prevent the models from potentially becoming too complex and inapplicable to the real world.
 
 # Part 2: NHANES Study
 
@@ -302,11 +338,72 @@ summ(nhanesFull)
 
 # check model fit and check for influential points
 # residual plots
+ggResid(nhanesFull)
 
 # C+R plots
+crPlots(nhanesFull)
+
+nhanes2 <- nhanes
 ```
 
 Describe what you see and if you think any transformation(s) may be helpful:
+The model shows a modest adjusted R2 of 0.18, with the variables sbp, bmi, height, weight, age, and sex being statistically significant predictors.
+The residuals plot appears to show a pattern, indicating that a transformation could be appropriate.
+
+# NOTE: Moving this part here since the code would break when it was run after the later chunks
+
+```{r}
+set.seed(123) # for cross-validation later
+
+
+
+# Backward selection
+backward_model <- step(nhanesFull, direction = "backward")
+
+# Preparing data for glmnet
+X <- model.matrix(~ . - 1, data = nhanes2[, -1]) # Exclude the intercept and response variable
+Y <- nhanes2$ferritin
+
+# Fit Lasso
+cv.lasso <- cv.glmnet(X, Y, alpha = 1)
+lasso_coefs <- coef(cv.lasso, s = "lambda.min")
+
+# Fit Ridge
+cv.ridge <- cv.glmnet(X, Y, alpha = 0)
+ridge_coefs <- coef(cv.ridge, s = "lambda.min")
+
+# Fit Elastic Net
+cv.elasticnet <- cv.glmnet(X, Y, alpha = 0.5)
+elasticnet_coefs <- coef(cv.elasticnet, s = "lambda.min")
+```
+
+```{r}
+print(lasso_coefs)
+print(ridge_coefs)
+print(elasticnet_coefs)
+
+
+# remember that the cv.glmnet() function needs separate X (predictor) and Y (outcome) matrices
+# for example, since I called my model `maxmodel_log` I would do
+# X = model.matrix(maxmodel_log)[,-1]
+# Y = maxmodel_log$model$log_ferritin
+
+# fit lasso (you'll need to choose the appropriate alpha value)
+
+
+
+# fit ridge (you'll need to choose the appropriate alpha value)
+
+
+
+# elastic net (use alpha = 0.5 for this)
+
+
+# compare the coefficients/variables chosen
+# for a model named `my.model` fit with cv.glmnet
+# you can use coef(my.model, s = my.model$lambda.min) to grab the coefficients
+# if you use ols_step_backward_p the final model is stored under `my.model`$model
+```
 
 ## Transforming Variables
 
@@ -345,52 +442,39 @@ __Check for collinearity in the model that you just fit with all predictors incl
 
 ```{r}
 # check for collinearity
+vif_values <- vif(nhanesFull)
+print(vif_values)
+
+high_vif <- vif_values[vif_values > 5]
+print(high_vif)
 ```
 
 Comments:
+Based on a slightly arbitrary cutoff of 5, the variables weight, height, bmi, arm_circ, and waist_circ indicate potential collinearity.
 
-
-## 3. Variable selection
+## 3. Variable selection (see note above)
 
 __Run backward selection as well as cross-validated (10-fold) lasso regression, ridge regression, and elastic net to choose a model from the full set of covariates used in the previous section. Compare the set of variables and coefficients you end up with from each method of variable selection. What do you notice?__
 
+**See the above section about code breaking. The comments are still in this section, however.**
+
 *Note: The function I taught you for backward selection doesn't have any cross-validation capabilities built-in. There are ways to do cross-validated forward/backward selection(either by hand or with other R packages) but for now we won't. Also note that this is part of the reason why the step function uses AIC to pick variables (trying to control for overfitting)*
 
-```{r}
-set.seed(123) # for cross-validation later
 
-# backward selection (no cross-validation)
-
-# remember that the cv.glmnet() function needs separate X (predictor) and Y (outcome) matrices
-# for example, since I called my model `maxmodel_log` I would do
-# X = model.matrix(maxmodel_log)[,-1]
-# Y = maxmodel_log$model$log_ferritin
-
-# fit lasso (you'll need to choose the appropriate alpha value)
-
-
-
-# fit ridge (you'll need to choose the appropriate alpha value)
-
-
-
-# elastic net (use alpha = 0.5 for this)
-
-
-# compare the coefficients/variables chosen
-# for a model named `my.model` fit with cv.glmnet
-# you can use coef(my.model, s = my.model$lambda.min) to grab the coefficients
-# if you use ols_step_backward_p the final model is stored under `my.model`$model
-```
 
 Comment on similarities/differences between the final models from the various selection processes.
-
+Based on the coefficients from the various selection processes, the lasso and elastic net models appear to have produced sparser models,
+ selecting fewer variables by shrinking some coefficients to zero. In contrast, the ridge regression retains all predictors but with smaller coefficient values, 
+ suggesting a more conservative shrinkage approach without actual variable elimination. 
 
 ## 4. VIFs and model selection
 
 __Think back to the VIF values you got from the full model. What do you notice about the variables retained in these various models with respect to our collinearity results from above? Why do you think that is?__
 
 Answer here:
+The regularization methods, especially lasso and elastic net, tend to exclude or significantly shrink the coefficients of variables with high multicollinearity
+ (indicated by high VIF values). This suggests that these methods effectively address collinearity by either removing collinear variables (lasso and elastic net)
+  or by reducing their influence on the model (ridge).
 
 ## 5. Compare model fit
 
@@ -399,26 +483,41 @@ __Compare the model fit from the final models from lasso, ridge, and elastic net
 Note: I didn't include backward selection for this question because we didn't use cross-validation for that method, so that wouldn't be a very fair comparison.
 
 ```{r}
-# reminder that the mean squared error (averaged across CV folds) is stored in my.model$glmnet.fit$cvm
-# the R2 value is stored in my.model$glmnet.fit$dev.ratio
+# For Lasso
+lasso_best_index <- cv.lasso$index[1]
+lasso_best_mse <- cv.lasso$cvm[lasso_best_index]
+lasso_best_r2 <- cv.lasso$glmnet.fit$dev.ratio[lasso_best_index]
 
-# these will have lots of MSEs and R2 values, one for each tunring parameter value
-# the best tuning parameter index is stored in my.model$index[1] (for the minimum MSE)
-# you can use that index to grab the MSE and R2 value from the model with the best tuning parameter
+# For Ridge
+ridge_best_index <- cv.ridge$index[1]
+ridge_best_mse <- cv.ridge$cvm[ridge_best_index]
+ridge_best_r2 <- cv.ridge$glmnet.fit$dev.ratio[ridge_best_index]
 
-# MSEs from the 3 different models
+# For Elastic Net
+elasticnet_best_index <- cv.elasticnet$index[1]
+elasticnet_best_mse <- cv.elasticnet$cvm[elasticnet_best_index]
+elasticnet_best_r2 <- cv.elasticnet$glmnet.fit$dev.ratio[elasticnet_best_index]
 
+# Compare MSEs
+print(paste("Lasso MSE:", lasso_best_mse))
+print(paste("Ridge MSE:", ridge_best_mse))
+print(paste("Elastic Net MSE:", elasticnet_best_mse))
 
-# R2 values
+# Compare R2 values
+print(paste("Lasso R2:", lasso_best_r2))
+print(paste("Ridge R2:", ridge_best_r2))
+print(paste("Elastic Net R2:", elasticnet_best_r2))
 ```
 
-Your model choice and rationale:
+Your model choice and rationale:  
+The R2 values all appear very similar. The lasso and elastic net MSEs are very similar as well. 
+Between Lasso and Elastic Net, the Lasso has a slightly lower MSE, suggesting it may be the best model in terms of prediction error.
 
 ## 6. Cross-validation
 
 __What was the purpose of using cross-validation in these models?__
 
-Answer here:
+Cross-validation helped us identify which variables could potentially be contributing to overfitting.
 
 
 
