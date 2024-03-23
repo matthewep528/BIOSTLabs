@@ -1,0 +1,253 @@
+---
+title: 'Module 5 Lecture Code: Part II'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Lecture 2
+
+## R packages
+
+Load necessary packages.
+
+```{r}
+library(tidyverse)
+library(here)
+library(readxl)
+library(arsenal)
+library(car)
+
+```
+
+## Data Management
+
+```{r}
+i_am("Notes/Module 5/M5_lecture2.Rmd")
+
+kaiser_original <- read_excel(here("Notes","Datasets","phototherapy.xls")) 
+
+kaiser = kaiser_original %>%
+  mutate(age_days = factor(age_days, levels = c("<24 h", "24 to <48h", "48 to <72h","72 to <96h", ">= 96h")),
+         bwcat = factor(bwcat, levels = c("2.0-2.4 kg", "2.5-2.9 kg","3.0-3.4 kg","3.5-3.9 kg",">= 4.0 kg")),
+         gest_age = factor(gest_age, levels = c(35:40, ">=41")),
+         hospital = factor(hospital, levels = c("1&4",2,3,5:12)),
+         qual_TSB = factor(qual_TSB, levels = c("-3 to <-2","-2 to <-1","-1 to <0","0 to <1","1 to <2","2 to <3")),
+         phototherapy = factor(phototherapy, levels = c("no","yes")),
+         over_thresh = factor(over_thresh, levels = c("no","yes")))
+
+
+```
+
+## Plot data
+
+```{r}
+
+xtabs(~ phototherapy + over_thresh, data = kaiser) %>% 
+  prop.table(margin = 1)
+
+kaiser %>%
+  ggplot(aes(x = phototherapy, fill = over_thresh)) +
+  geom_bar(position = "dodge") + 
+  theme_bw() + 
+  labs(fill = "Over TSB Threshold")
+
+```
+
+
+```{r, results='asis'}
+
+labels(kaiser)  <- c(age_days = 'Age', 
+                     birth_wt = "Birthweight (kg)", 
+                     bwcat = "Birthweight Cat.", 
+                     gest_age = "Gestational Age (weeks)", 
+                     hospital = "Hospital",
+                     over_thresh = "Over Transfusion Treshold",
+                     male = "Male (y/n)", 
+                     qual_TSB = "TSB Interval", 
+                     year = "Year")
+tbl <- tableby(phototherapy ~ age_days + birth_wt + male + gest_age + year + hospital +  qual_TSB, data = kaiser,
+               total = F)
+
+summary(tbl)
+
+tests(tbl)
+```
+
+## Simple logistic regression model
+
+```{r}
+# logistic regression model with just treatment
+fit0 <- glm(over_thresh ~ phototherapy, data = kaiser, family = binomial(link = "logit"))
+
+# output 
+summary(fit0)
+
+```
+
+## Fully Adjusted Model
+
+```{r}
+
+# model with all potential confounders included
+fullfit <- glm(over_thresh ~ phototherapy + age_days + birth_wt + gest_age + hospital + male + year + qual_TSB, data = kaiser, family = binomial(link = "logit"))
+
+# output
+summary(fullfit)
+
+```
+
+## Calculating Propensity Scores
+
+```{r}
+
+# logistic regression model for propensity scores
+propensity_model <- glm(phototherapy ~ age_days + birth_wt + gest_age + hospital + male + year + qual_TSB,
+                        data = kaiser,
+                        family = binomial(link = "logit"))
+
+
+# print output
+summary(propensity_model)
+
+# save propensity scores
+pscores <- predict(propensity_model, type = "response")
+
+# save in data frame
+kaiser <- kaiser %>%
+  mutate(pscore = pscores)
+
+# plot
+kaiser %>%
+  ggplot(aes(y = pscore, x = phototherapy)) + 
+  geom_boxplot() + 
+  theme_bw() + 
+  labs(x = "Phototherapy", y = "Propensity Score")
+
+```
+
+### Example with just sex and year
+
+```{r}
+
+
+  
+# propensity scores using just year and sex
+fit_year_sex <- glm(phototherapy ~ male + year, data = kaiser, family = binomial(link = "logit"))
+
+
+# output
+summary(fit_year_sex)
+
+# plot propensity scores by treatment group
+kaiser %>%
+  mutate(pscore2 = predict(fit_year_sex, type = "response")) %>%
+  mutate(male = ifelse(male=="yes","Male","Not Male")) %>%
+  ggplot(aes(x = phototherapy, y = pscore2)) + 
+  geom_boxplot() + 
+  theme_bw() 
+  
+# plot
+kaiser %>%
+  mutate(male = ifelse(male=="yes","Male","Not Male")) %>%
+  ggplot(aes(x = year, fill = phototherapy)) +
+  geom_bar(position = "dodge",color = "black") + 
+  theme_bw() + 
+  facet_wrap(.~ male, scales = "free_y") + 
+  labs(fill. ="Phototherapy", x = "Birth Year")+
+  scale_x_continuous(breaks = c(seq(1995, 2004, by = 3))) + 
+  theme(legend.position = "bottom") + 
+  scale_fill_viridis_d()
+
+# boxplot
+kaiser %>%
+  mutate(male = ifelse(male=="yes","Male","Not Male")) %>%
+  ggplot(aes(x = phototherapy, y = year)) + 
+  geom_boxplot(aes(fill = phototherapy)) + 
+  theme_bw() + 
+  scale_y_continuous(breaks = c(seq(1995, 2004, by = 3))) + 
+  facet_wrap(.~ male) + 
+  scale_fill_viridis_d() + 
+  theme(legend.position = "none") + 
+  labs(y = "Year", x = "Phototherapy")
+
+kaiser %>%
+  mutate(male = ifelse(male=="yes","Male","Not Male")) %>%
+  group_by(year, male) %>%
+  summarise(prop = sum(phototherapy=="yes")/n()) %>%
+  ggplot(aes(x = year, y = prop, color = male)) +
+  geom_point() + 
+  theme_bw() + 
+  labs(color ="", x = "Birth Year", y = "Proportion of Infants Given Phototherapy") +
+  scale_x_continuous(breaks = c(seq(1995, 2004, by = 3))) + 
+  geom_smooth(se = F) 
+
+# data to predict on
+newdt = expand.grid(male = c("no","yes"), year = 1995:2004) 
+# propensity scores
+ps = predict(fit_year_sex, type = "response", newdata = newdt)
+
+newdt %>%
+  mutate(propensity_score = ps,
+         male = ifelse(male=="yes","Male","Not Male")) %>%
+  ggplot(aes(x = year, color = male, y = propensity_score)) + 
+  geom_point() + 
+  theme_bw() + 
+  scale_x_continuous(breaks = c(seq(1995, 2004, by = 3))) +
+  labs(x = "Birth Year", y = "Propensity Score", color = element_blank())
+
+```
+
+## Propensity Score as Covariate
+
+```{r}
+
+# fit model controlling for propensity score
+fit1 <- glm(over_thresh ~ phototherapy + pscore, data = kaiser, family = binomial(link = "logit"))
+
+# print output
+summary(fit1)
+
+# check linearity
+crPlots(fit1, terms = ~ pscore)
+
+
+```
+
+
+## Split into Quintiles
+
+```{r}
+
+# break into quintiles
+pscores_cat = cut(pscores, breaks = quantile(pscores, probs = (0:5)/5), include.lowest = TRUE, labels = paste0("Q",1:5))
+
+# add to data frame
+kaiser$pscore_cat = pscores_cat
+
+# make sure it worked
+kaiser %>% 
+  ggplot(aes(x = pscore_cat, y = pscore)) + 
+  geom_boxplot() + 
+  theme_bw()
+
+# fit model controlling for propensity score quintile
+fit2 <- glm(over_thresh ~ phototherapy + pscore_cat, data = kaiser, family = binomial(link = "logit"))
+
+# print output
+summary(fit2)
+
+# adjusted odds ratio
+exp(coef(fit2)[2])
+
+```
+
+
