@@ -1,0 +1,135 @@
+---
+title: "Module 4 Lecture Code: Part I"
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(error = TRUE)
+```
+
+# Lecture 1
+
+## R packages
+
+Load necessary packages. 
+
+```{r}
+library(tidyverse)
+library(here)
+#library(lmtest)
+#library(glmtoolbox)
+
+```
+
+## Data management
+
+
+```{r}
+i_am("Notes/Module 4/M4_lecture1.Rmd")
+
+pc = read_csv(here("Notes","Datasets","prostatecancer.csv")) %>% 
+  mutate(size = factor(size, levels = c(0,1), labels = c("Small","Large")))
+
+```
+
+## Plot data
+
+```{r}
+# plot linear model
+pc %>%
+  ggplot(aes(x = age, y = ni)) +
+  geom_point() + 
+  theme_bw() + 
+  labs(x = "Age", y = "Nodular Involvement") + 
+  geom_smooth(method = "lm", formula = y ~ x, se = F)
+
+# fit linear regression model
+slr = lm(ni ~ age, data = pc)
+
+# residual plots to see why this is clearly the wrong approach
+plot(slr, which = 1:2)
+
+```
+
+## Toy example 
+
+```{r}
+
+df <- data.frame(x=c(0.50,0.75,1.00,1.25,1.50,1.75,1.75,2.00,2.25,2.50,2.75,3.00,3.25,3.50,4.00,4.25,4.50,4.75,5.00,5.50), y=c(0,0,0,0,0,0,1,0,1,0,1,0,1,0,1,1,1,1,1,1))
+
+
+df %>%
+  ggplot(aes(x = x, y = y)) +
+  geom_point() + 
+  theme_bw() + 
+  labs(x = "Predictor", y = "Response") + 
+  geom_smooth(method = "lm", formula = y ~ x, se = F)
+
+df %>%
+  ggplot(aes(x = x, y = y)) +
+  geom_point() + 
+  theme_bw() + 
+  labs(x = "Predictor", y = "Response") + 
+  geom_smooth(method = "glm", method.args = list(family = "binomial") ,
+              se = F)
+
+
+
+
+```
+
+```{r}
+# table of counts
+xtabs(~size + ni, data = pc)
+
+# table of proportions
+xtabs(~size + ni, data = pc) %>% prop.table(margin = 1)
+
+odds_small = 5/21
+odds_large = 15/12
+
+or = odds_large/odds_small
+or
+
+# fit logistic regression model for nodular involvement using age as the predictor
+fit <- glm(ni ~ size, data = pc, family = binomial(link = "logit"))
+
+# print output
+summary(fit)
+
+# coefficients
+coef(fit)
+
+# exponentiated coefficients
+coef(fit) %>% exp()
+
+# predict log odds
+predict(fit, newdata = data.frame(size = "Small"))
+predict(fit, newdata = data.frame(size = "Large"))
+
+
+
+# predict probability
+predict(fit, newdata = data.frame(size = "Small"),
+        type = "response")
+predict(fit, newdata = data.frame(size = "Large"),
+        type = "response")
+
+```
+
+```{r}
+
+# multiple predictors
+fit1 <- glm(ni ~ age + acid + xray + size + grade, data = pc, family = binomial(link = "logit"))
+
+#print output
+summary(fit1)
+
+```

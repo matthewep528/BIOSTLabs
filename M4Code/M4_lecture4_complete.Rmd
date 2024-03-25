@@ -1,0 +1,305 @@
+---
+title: 'Module 4 Lecture Code: Part IV'
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(error = TRUE)
+```
+
+# Setup
+
+## R packages
+
+Load necessary packages. 
+
+```{r}
+library(tidyverse)
+library(here)
+library(lmtest)
+library(glmtoolbox)
+library(readxl)
+library(car)
+library(sjPlot)
+```
+
+
+## Data Management
+
+```{r, warning=F}
+i_am("Notes/Module 4/M4_lecture4_complete.Rmd")
+
+# read in data
+mswb = read_csv(here("Notes","Datasets","ms_wbi.csv"))
+
+# take a look
+skimr::skim(mswb)
+
+# drop missing values from data
+mswb = mswb %>% 
+  drop_na() %>% 
+  filter(resources_total!="Incomplete" & pre_clinical_duration!=0) %>% 
+  mutate(faculty_support = factor(faculty_support, levels = c(3,2,1), labels = c("Very Supportive", "Somewhat Supportive","Not Supportive")),
+         ms_severe_distress = as.factor(ms_severe_distress),
+         resources_total = as.numeric(resources_total),
+         URM = race_category %in% c("Black/African", "Hispanic/Latinx", "Native American"),
+         disability = factor(disability, levels = c("No", "Yes","I'd Prefer Not to Say")),
+         specialty_competitiveness = factor(specialty_competitiveness, levels = c("Low","Mod","High")))
+
+```
+
+# Data Analysis
+
+## Odds of medical student distress and faculty support (table-based calculations)
+
+```{r}
+# table of counts
+xtabs(~ faculty_support + ms_severe_distress , data = mswb)
+
+# table of proportions
+xtabs(~ faculty_support + ms_severe_distress , data = mswb) %>% 
+  prop.table(margin = 1)
+
+# here I'm making a data frame of the tables above so I can use it to calculate the odds/odds ratios/etc below instead of doing it by hand (not necessary)
+propdf = xtabs(~ faculty_support + ms_severe_distress , data = mswb) %>% 
+  prop.table(margin = 1) %>% 
+  as.data.frame() %>% 
+  pivot_wider(names_from = ms_severe_distress, values_from = Freq) 
+
+# odds calculation
+odds = propdf$Yes / propdf$No
+odds
+
+# odds are 0.5848485, 1.5654545, 3.9310345
+# for        very,     somewhat,     not
+
+# log odds calculation
+log_odds = log(odds)
+log_odds
+# log odds are 0.5848485, 1.5654545, 3.9310345
+# for            very,     somewhat,     not
+# notice that the odds that were above 1 are positive on the log-odds scale and odds that were below 1 are negative on the log odds scale (log(1)=0)
+
+# odds ratio calculation
+or = odds/odds[1]
+or
+# odds ratios are 1 (ref), 2.676684 6.721458
+# for              very,   somewhat,  not
+
+# log odds ratio calculation
+log_or = log(or)
+log_or
+
+# log odds ratios are 0 (ref) 0.9845787 1.9053051
+# for                   very,  somewhat,  not
+```
+
+## Model-based calculations
+
+```{r}
+# logistic regression model
+fit_support <- glm(ms_severe_distress ~ faculty_support, data = mswb, 
+                   family = binomial(link = "logit"))
+  
+# log ORs
+fit_support$coefficients ; log_or
+# notice how the second two coefficients are the same as the log odds ratios we calculated using the table (the intercept isn't a log-odds ratio, so this is different)
+
+# ORs
+exp(fit_support$coefficients) ; or
+# notice how the second two exponentiated coefficients are the same as the odds ratios we calculated using the table (the intercept isn't a log-odds ratio, so this is different)
+
+# probabilities
+predict(fit_support, newdata = data.frame(faculty_support = levels(mswb$faculty_support)),
+        type = "response")
+
+# odds
+odds_model = predict(fit_support, newdata = data.frame(faculty_support = levels(mswb$faculty_support))) %>% exp()
+
+odds_model; odds
+# they match!
+
+# log odds
+log_odds_model = predict(fit_support, newdata = data.frame(faculty_support = levels(mswb$faculty_support)))
+log_odds_model; log_odds
+# they match!
+
+propdf$Yes
+
+# confidence intervals
+confint(fit_support) ; 
+exp(confint(fit_support))
+
+# Plot odds ratios
+plot_model(fit_support, show.values = T, 
+           title = "Medical Student Distress", 
+           vline.color = "black") + 
+  theme_sjplot()
+
+```
+
+
+
+## Interaction with faculty-student-ratio
+
+
+```{r}
+# fit model with faculty support, faculty-student ratio, and interaction
+
+fit_interact <- glm(ms_severe_distress ~ faculty_support*faculty_student_ratio , data = mswb, family = binomial(link = "logit"))
+
+# print model output
+summary(fit_interact)
+
+# print model output (cleaner table)
+broom::tidy(fit_interact)
+
+# plot model output
+plot_model(fit_interact, 
+           show.values = T, value.offset = .35, value.size = 2.5, # print estimates
+           transform = NULL, # don't exponentiate (show on log scale)
+           title = "Medical Student Distress", 
+           vline.color = "black", # vertical line at null value
+           colors = c("#377EB8","#E41A1C" )) + # here I'm swapping the colors
+  theme_sjplot()
+
+
+
+
+```
+
+## Testing for effect modification
+
+```{r}
+# test for interaction
+fit_main <- glm(ms_severe_distress ~ faculty_support + faculty_student_ratio , data = mswb, family = binomial(link = "logit"))
+
+lrtest(fit_main,fit_interact)
+# The null hypothesis is that the two interaction term coefficients (b4 and b5 are 0)
+# another way to think about this is that the smaller model is just as good as the bigger model (they're the same, in fact, if b4=b5=0)
+# the alternative is that at least one isn't 
+# or, we need some of the interaction terms in the model
+# p = 0.7011, so we don't have strong evidence that either of the interaction terms are not 0
+# this doesn't mean they are 0, just means we don't have strong evidence to claim they aren't
+# hence, we don't have evidence of effect modification
+
+# test if faculty-student ratio is necessary in model
+lrtest(fit_support, fit_main)
+# even though there wasn't evidence of effect modification, it does look like adding the main effect for faculty_student_ratio helped the model fit (coefficient not equal to 0)
+
+```
+
+# Fitting full main-effects model
+
+```{r}
+# full model
+fitfull <- glm(ms_severe_distress ~ faculty_support + faculty_student_ratio + resources_total + debt + ms_year_category + region + city_characteristic + specialty_competitiveness + research_ranking + URM + gender_category + grades + disability + tuition_avg_cat , 
+               data = mswb, family = binomial(link = "logit"))
+
+# print model output
+broom::tidy(fitfull)
+
+# plot model output
+# odds
+plot_model(fitfull, 
+            show.values = T, value.offset = .35, value.size = 2.5, # print estimates
+           title = "Medical Student Distress", 
+           vline.color = "black", # vertical line at null value
+           colors = c("#377EB8","#E41A1C" )) + # here I'm swapping the colors
+  theme_sjplot()
+
+# log odds
+plot_model(fitfull, 
+          show.values = T, value.offset = .35, value.size = 2.5, # print estimates
+           transform = NULL, # don't exponentiate (show on log scale)
+           title = "Medical Student Distress", 
+           vline.color = "black", # vertical line at null value
+           colors = c("#377EB8","#E41A1C" )) + # here I'm swapping the colors
+  theme_sjplot()
+```
+
+## Checking Assumptions
+
+```{r}
+
+# check linearity assumption
+crPlots(fitfull, terms = ~ resources_total + faculty_student_ratio + research_ranking)
+# the margenta line (the loess curve) looks like it deviates from the fitted line (the blue dashed line) here for resources. Maybe we should try a polynomial term for this variable
+
+# refit model with polynomial term for resources based on C+R plots above
+fitfull2 <- glm(ms_severe_distress ~ faculty_support + faculty_student_ratio + resources_total + I(resources_total^2) + debt + ms_year_category + region + city_characteristic + specialty_competitiveness + research_ranking + URM + gender_category + grades + disability + tuition_avg_cat , 
+                data = mswb, family = binomial(link = "logit"))
+
+# check linearity in the new model with the squared term
+crPlots(fitfull2, terms = ~ resources_total + I(resources_total^2)+ faculty_student_ratio + research_ranking)
+
+# check for collinearity (look at last column and compare to sqrt(5) or sqrt(10))
+vif(fitfull2)
+# oh no! adding the polynomial term introduced some collinearity
+# let's try centering (I'll center at the value 3)
+
+# center resources to see if that reduces collinearity
+fitfull3 <- glm(ms_severe_distress ~ faculty_support + faculty_student_ratio + resources_total + I(resources_total^2) + debt + ms_year_category + region + city_characteristic + specialty_competitiveness + research_ranking + URM + gender_category + grades + disability + tuition_avg_cat , 
+                data = mswb %>% mutate(resources_total = resources_total - 3), 
+                family = binomial(link = "logit"))
+# collinearity
+vif(fitfull3)
+# nice! that helped :)
+
+```
+
+## Looking for influential points
+
+```{r}
+# plot residuals vs fitted (not a super helpful plot to look at)
+plot(fitfull3, which = 1)
+
+# check for high leverage or influential points
+influenceIndexPlot(fitfull2, c("Cook","hat"))
+
+# two points with large Cook's distance
+fitfull3$model[c(1593,777),]
+
+# fit model to check sensitivity of model to these points
+fit_sens = glm(ms_severe_distress ~ faculty_support + faculty_student_ratio + resources_total + I(resources_total^2) + debt + ms_year_category + region + city_characteristic + specialty_competitiveness + research_ranking + URM + gender_category + grades + disability + tuition_avg_cat , 
+                data = mswb %>% mutate(resources_total = resources_total - 3) %>%
+                 slice(-c(1593,777)), 
+                family = binomial(link = "logit"))
+
+# grab coefficients to see if they changed a lot
+coefficients(fit_sens)
+# 
+
+```
+
+The coefficients don't look all that different (not super surprising since I only dropped 2 of 2600 points)
+
+## Testing overall fit
+
+```{r}
+
+# HL test
+performance::performance_hosmer(fitfull3)
+
+# test statistic is 12.072
+# we used 10 groups (df = # groups - 2)
+# the p-value is 
+pchisq(12.072, df = 10 - 2, lower.tail = F )
+
+# remember that the test statistic is the sum of the squared differences between the observed proportion of events in each group and the expected proportion based on the model (divided by the expected to make things follow a chi-squared distribution)
+# if this is big, it means the proportions the model predicts are far from the true proportions
+# if this is small, it means the proportions the model predicts are close to the true proportions
+# we reject the null hypothesis (that the model fits well) when the observed and expected proportions are very different, AKA the test statistic is large, and the p-value is small
+# we fail to reject the null when the test statistic is small, meaning we don't have sufficient evidence to claim that the model doesn't fit well
+
+# we got a p-value of 0.148, so using alpha = 0.05 as a threshold, we don't have sufficient evidence 
+
+```
+
+

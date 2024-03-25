@@ -1,0 +1,282 @@
+---
+title: 'Module 4 Lecture Code: Part III'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Lecture 3
+
+## R packages
+
+Load necessary packages. 
+
+```{r}
+library(tidyverse)
+library(here)
+library(lmtest)
+library(car)
+library(glmtoolbox)
+
+```
+
+## Data management
+
+
+```{r}
+
+i_am("Notes/Module 4/M4_lecture2.Rmd")
+
+pc = read_csv(here("Notes","Datasets","prostatecancer.csv")) %>% 
+  mutate(size = factor(size, levels = c(0,1), labels = c("Small","Large")),
+         xray = factor(xray, levels = c(0,1), labels = c("Negative","Positive")))
+
+
+```
+
+## Fit Models
+
+```{r}
+# model with size and acid levels
+m1 <- glm(ni ~ size + acid, data = pc, family = binomial(link = "logit"))
+# print output
+summary(m1)
+
+# larger model 
+m2 <- glm(ni ~ size + acid + age + xray , data = pc, family = binomial(link = "logit"))
+# print output
+summary(m2)
+```
+
+
+## Other Metrics of Fit
+
+```{r}
+# LRT
+lrt = lrtest(m1, m2)
+lrt
+lrt$Chisq
+
+# drop in deviance
+m1$deviance - m2$deviance
+
+# "global LRT"
+# test model 1
+lrtest(m1)
+m1$null.deviance - m1$deviance 
+pchisq(11.63866, df = 2, lower.tail = F)
+
+# test model 2
+lrtest(m2)
+m2$null.deviance - m2$deviance 
+pchisq(21.15469, df = 4, lower.tail = F)
+
+```
+
+```{r}
+
+# Deviance
+m1$deviance ; m2$deviance
+# alternative if you prefer functions to $ operator
+deviance(m1) ; deviance(m2)
+
+# pseudo R2
+r2_m1 = 1 - (m1$deviance/m1$null.deviance)
+r2_m2 = 1 - (m2$deviance/m2$null.deviance) 
+r2_m1 ; r2_m2
+
+
+
+# Adjusted (pseudo) R2
+adjR2(m1) ; adjR2(m2)
+
+# calculate by hand
+1- ((m1$df.null)/(m1$df.residual))*(1-r2_m1)
+1- ((m2$df.null)/(m2$df.residual))*(1-r2_m2)
+
+#AIC
+AIC(m1) ; AIC(m2)
+
+# BIC
+BIC(m1) ;BIC(m2)
+
+
+# calculate AIC by hand
+ll1 = logLik(m1)
+ll2 = logLik(m2)
+-2*as.numeric(ll1) + 2*(attr(ll1,"df"))
+-2*as.numeric(ll2) + 2*(attr(ll2,"df"))
+# calculate BIC by hand 
+n = length(m2$y)
+-2*as.numeric(ll1) + log(n)*(attr(ll1,"df"))
+-2*as.numeric(ll2) + log(n)*(attr(ll2,"df"))
+```
+
+## Residuals
+
+In this section, I show the various types of residuals and how to calculate them by hand. Working residuals and partial residuals (espeically the calculations by hand) are beyond the scope of this class. However, if you want to know more this [post on stack exchange](https://stats.stackexchange.com/questions/1432/what-do-the-residuals-in-a-logistic-regression-mean) in conjunction with chapter 4 in the Agresti textbook may be helpful to you.  
+
+```{r warning=F}
+# pearson residuals
+pres = residuals(m2, type = "pearson")
+# standardized pearson residuals
+spres = rstandard(m2, type = "pearson")
+# deviance residuals
+# these are the default so you don't have to include the type argument
+dres = residuals(m2, type = "deviance")
+
+# -----------------------------------------------------------------------------
+# showing the calculations by hand (not necessary for you to use this on labs :) ) 
+# outcome
+yi = m2$y
+# linear predictor
+logodds = predict(m2)
+# predicted probability 
+phat = predict(m2, type = "response")
+# hat value (leverage)
+hii = hatvalues(m2)
+
+# pearson residuals
+residuals(m2, type = "pearson")[1:3]
+# by hand
+((yi-phat)/sqrt(phat*(1-phat)))[1:3]
+
+# standardized pearson residuals
+rstandard(m2, type = "pearson")
+
+# writing my own function to show you how deviance residuals are calculate (not necessary for you to use this)
+my_dev_resid = function(y,p){
+  r = vector(length = length(y))
+  r[y==0]=-sqrt(-2*log(1-p[y==0]))
+  r[y==1]=sqrt(-2*log(p[y==1]))
+  return(r)
+}
+phat = predict(m2, type = "response")
+my_dev_resid(y = m2$y, p = phat)[1:3]
+
+di = residuals(m2, type = "deviance")
+di[1:3]
+
+# model deviance and hand-calculated deviance (sum of squared deviance residuals)
+m2$deviance; sum(di^2)
+
+
+# working residuals
+residuals(m2, type = "working")[1:3]
+wi = ((yi-phat)*((1-phat)/phat)* (1-phat)^-2)
+wi[1:3]
+
+# partial
+residuals(m2, type = "partial")[1:3,]
+# by hand
+part_res = wi + (scale(model.matrix(m2)[,-1], scale = F, center = T))%*%diag(coef(m2)[-1])
+part_res[1:3,]
+
+
+```
+
+## Plotting Residuals
+
+```{r}
+pc = pc %>%
+  mutate(rs = rstandard(m2, type = "pearson"),
+         di = residuals(m2, type = "deviance"),
+              fitted = m2$fitted.values)
+
+# residuals vs fitted values plot
+plot(m2, which = 1)
+
+# again in ggplot
+pc %>% 
+  ggplot(aes(x = fitted, y = rs)) + 
+  geom_point() + 
+  theme_bw()+ 
+  labs(x = "Fitted values", y = "Standardized Pearson Residuals")
+
+
+# residuals by index
+pc %>%
+  ggplot(aes(x = patient, y = rs, label = patient)) + 
+  geom_point() + 
+  geom_hline(yintercept = 0) + 
+  geom_hline(yintercept = 2, linetype = 2, color = "red") + 
+  geom_hline(yintercept = -2, linetype = 2, color = "red") + 
+  geom_segment(aes(xend = patient, yend = 0)) + 
+  theme_bw() + 
+  geom_text(hjust = "left", vjust = "bottom", size = 3.5) + 
+  labs(x = "Fitted values", y = "Standardized Pearson Residuals")
+  
+# residuals by index
+pc %>%
+  ggplot(aes(x = patient, y = di, label = patient)) + 
+  geom_point() + 
+  geom_hline(yintercept = 0) + 
+  geom_hline(yintercept = 2, linetype = 2, color = "red") + 
+  geom_hline(yintercept = -2, linetype = 2, color = "red") + 
+  geom_segment(aes(xend = patient, yend = 0)) + 
+  theme_bw() + 
+  geom_text(hjust = "left", vjust = "bottom", size = 3.5) + 
+  labs(x = "Fitted values", y = "Deviance Residuals")
+
+
+
+```
+
+## High Leverage and Influential Points
+
+```{r}
+# leverage
+influenceIndexPlot(m2, "hat")
+
+# Cook's distance
+influenceIndexPlot(m2, "Cook")
+
+# function to get Cook's distance
+cook = cooks.distance(m2)
+# by hand
+my_cook = (rstandard(m2, type = "pearson")^2)*hii/(5*(1-hii))
+
+# check that they're the same
+cook[23:25] ; my_cook[23:25]
+```
+
+
+
+
+```{r}
+# component plus residual plots
+crPlots(m2, id = T)
+# component plus residual plots for just continuous variables
+crPlots(m2, terms = ~ age + acid, id = T)
+
+```
+
+## Collinearity
+
+```{r}
+
+# VIF
+vif(m2)
+
+
+```
+
+
+```{r}
+
+# Hosmer-Lemeshow 
+hltest(m2)
+
+# you could change # bins with n_bins command in this function
+performance::performance_hosmer(m2)
+
+```
+

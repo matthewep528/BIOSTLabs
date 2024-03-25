@@ -1,0 +1,180 @@
+---
+title: 'Module 4 Lecture Code: Part II'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Lecture 2
+
+## R packages
+
+Load necessary packages. 
+
+```{r}
+library(tidyverse)
+library(here)
+library(lmtest)
+library(car)
+
+
+```
+
+## Data management
+
+
+```{r}
+
+i_am("Notes/Module 4/M4_lecture2.Rmd")
+
+pc = read_csv(here("Notes","Datasets","prostatecancer.csv")) %>% 
+  mutate(size = factor(size, levels = c(0,1), labels = c("Small","Large")),
+         xray = factor(xray, levels = c(0,1), labels = c("Negative","Positive")))
+
+```
+
+## Interaction Terms
+
+```{r}
+# model with size and acid levels
+m1 <- glm(ni ~ size + acid, data = pc, family = binomial)
+# print output
+summary(m1)
+
+# model with interaction added
+m2 <- glm(ni ~ size + acid + size:acid, data = pc, family = binomial)
+# print output
+summary(m2)
+
+# --------------------------------------------------------------------
+# making plots (you don't need this code--i just used it to make some illustrative plots for lecture)
+x_values <- expand.grid(acid = rep(seq(min(pc$acid), max(pc$acid), length.out = 100),2), 
+              size = rep(c("Small","Large"), each = 100) ) 
+
+log_odds = predict(m2, x_values)
+
+df = x_values %>% 
+  mutate(log_odds,
+         odds = exp(log_odds),
+         p = odds/(1+odds))
+
+df %>%
+  ggplot(aes(x = acid, y = log_odds, color = size)) + 
+  geom_line() + 
+  theme_bw() + 
+  labs(x = "Serum Acid Phosphatase", y = "Log odds (NI)",
+       color = "")
+
+df %>%
+  ggplot(aes(x = acid, y = odds, color = size)) + 
+  geom_line() + 
+  theme_bw() + 
+  labs(x = "Serum Acid Phosphatase", y = "Odds (NI)",
+       color = "")
+
+df %>%
+  ggplot(aes(x = acid, y = p, color = size)) + 
+  geom_line() + 
+  theme_bw() + 
+  labs(x = "Serum Acid Phosphatase", y = "P(NI)",
+       color = "")
+
+# --------------------------------------------------------------------
+
+## interaction between two categorical variables
+# model with interaction between tumor size and xray +/-
+m3 <- glm(ni ~ size + xray + size:xray, data = pc, family = binomial)
+# print output
+summary(m3)
+
+# --------------------------------------------------------------------
+# making plots (you don't need this code--i just used it to make some illustrative plots for lecture)
+x_values = expand.grid(xray = c("Positive","Negative"),
+                       size = c("Small", "Large"))
+
+log_odds = predict(m3, x_values)
+
+df = x_values %>% 
+  mutate(log_odds,
+         odds = exp(log_odds),
+         p = odds/(1+odds))
+
+df %>%
+  ggplot(aes(color = xray, y = log_odds, x = size)) + 
+  geom_point(size = 3) + 
+  theme_bw() + 
+  labs(x = "Tumor Size", y = "Log odds (NI)",
+       color = "")
+
+df %>%
+  ggplot(aes(color = xray, y = odds, x = size)) + 
+  geom_point(size = 3) + 
+  theme_bw() + 
+  labs(x = "Tumor Size", y = "Odds (NI)",
+       color = "")
+
+df %>%
+  ggplot(aes(color = xray, y = p, x = size)) + 
+  geom_point(size = 3) + 
+  theme_bw() + 
+  labs(x = "Tumor Size", y = "P(NI)",
+       color = "")
+
+```
+
+## Hypothesis Testing
+
+```{r}
+
+# likelihood ratio test
+lrtest(m1, m2)
+# another way to run LR test
+anova(m1,m2, test = "Chisq")
+pchisq(0.4118588, df = 1, lower.tail = F)
+
+# Wald test
+waldtest(m1,m2, test = "Chisq")
+
+# calculate by hand
+se = summary(m2)$coefficients[, "Std. Error"]
+
+# (betahat - beta0)/se 
+z = (m2$coefficients - 0 )/se
+z
+
+# two-tailed p-values
+pnorm(abs(z), lower.tail = F)*2
+pchisq(z^2, df = 1, lower.tail = F)
+
+
+```
+
+## Confidence Intervals
+
+```{r}
+# confidence interval
+# default `level` is 0.95
+confint(m1)
+confint(m1) %>% exp()
+
+# wald confidence interval
+confint.default(m1)
+
+# by hand
+# lower bounds
+m1$coefficients - summary(m1)$coefficients[,"Std. Error"] * qnorm(.975)
+# upper bounds
+m1$coefficients + summary(m1)$coefficients[,"Std. Error"] * qnorm(.975)
+
+```
+
+
+
