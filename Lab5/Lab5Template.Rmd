@@ -1,12 +1,15 @@
 ---
-title: "Lab 5 Template"
-author: "YOUR NAME HERE"
+title: "M4 Lab"
+author: "Matthew Præstgaard"
+date: "Spring 2024"
 output:
-  html_document:
-    df_print: paged
-    toc: true
-    toc_depth: '3'
-    code_folding: show
+  rmdformats::downcute:
+    self_contained: true
+    default_style: "dark"
+    downcute_theme: "default"
+    code_folding: "show"
+  svglite:
+    fig.retina: 2
 ---
 
 ```{r setup, include=FALSE}
@@ -32,7 +35,7 @@ library(pROC)
 library(glmnet)
 library(glmtoolbox)
 library(nnet)
-
+library(jtools)
 ```
 
 ## Data management
@@ -49,7 +52,7 @@ The aim of this lab is to explore race differences in self-reported hot flashes 
 # read in the data
 # make age group a factor variable (otherwise it will read as numeric in regression models)
 
-
+hflash <- read_xlsx(here("Lab5", "hflash.xlsx"))
 
 
 
