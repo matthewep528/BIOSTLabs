@@ -1,0 +1,343 @@
+---
+title: "M4 Lab"
+author: "Matthew Præstgaard"
+date: "Spring 2024"
+output:
+  rmdformats::downcute:
+    self_contained: true
+    default_style: "dark"
+    downcute_theme: "default"
+    code_folding: "show"
+  svglite:
+    fig.retina: 2
+---
+
+```{r setup, include = FALSE}
+require(knitr)
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(error = TRUE)
+```
+
+
+
+
+# Lab Setup
+
+## All code available on https://github.com/matthewep528/BIOSTLabs
+
+## R packages
+## Note: Some results may not show up properly in the default dark theme and only in the light theme
+
+
+Load necessary packages. 
+
+```{r, message = FALSE}
+library(tidyverse)
+library(here)
+library(lmtest)
+library(glmtoolbox)
+library(car)
+```
+
+## Data management
+
+
+The following data come from the SEER cancer registry. We are interested in studying early mortality (defined as death within 2 months of cancer diagnosis) and potential risk factors. Notice there are some missing values in the residency and income variables, make sure to drop the missing values from the data so each model is fit using the same data.
+
+
+```{r, message = FALSE}
+# read in data
+# I've included code to turn sex and race into factor variables for you
+
+seer <- read_csv(here("Lab4", "seer2016.csv")) %>%
+    mutate(
+        race = factor(race,
+            levels = c(0, 1, 2, 3, 99),
+            labels = c("White", "Black", "American Indian/Alaska Native", "Asian or Pacific Islander", "Unknown")
+        ),
+        sex = factor(sex,
+            levels = c(0, 1),
+            labels = c("Male", "Female")
+        ),
+        mortality_f = factor(early_mortality,
+            levels = c(0, 1),
+            labels = c("No", "Yes")
+        )
+    ) %>%
+    drop_na() # dropping NAs
+```
+
+# Data Analysis
+
+## 1. Contingency table
+
+__Make a contingency table showing the breakdown of early mortality by primary cancer site (use the grouped variable, grouped_primary).__
+__Make the contingency table that shows the raw counts and a second that shows the proportion of early mortality vs not early mortality within each primary cancer site.__
+
+
+```{r}
+# table of counts
+tableCount <- table(seer$mortality_f, seer$grouped_primary)
+kable(tableCount, caption = "Table of Counts of Early Mortality by Cancer Site")
+
+
+# table of proportions by cancer site
+tableProp <- prop.table(tableCount, 1)
+kable(tableProp, caption = "Table of Proportions of Early Mortality by Cancer Site")
+```
+
+## 2. Odds and odds ratios (table based)
+
+__Using this table calculate the odds of early mortality for people with bladder cancer, the odds of early mortality for people with breast cancer,__
+__and the odds ratio for early mortality comparing breast cancer to bladder cancer.__
+__Which group has the higher odds of early mortality, people with primary breast cancer or bladder cancer?__
+
+### odds for bladder cancer:
+
+$$\displaystyle{\displaylines{Odds_{Bladder}=9/45=0.2}}$$
+
+### odds for breast cancer:
+
+$$\displaystyle{\displaylines{Odds_{Breast}=19/290=0.066}}$$
+
+### odds ratio:
+
+$$\displaystyle{\displaylines{OR = 0.066/0.2 = \textbf{0.326}}}$$
+
+The **breast cancer** group has higher odds for mortality compared to the bladder cancer group **(0.066 vs 0.2, OR = 0.326).**
+
+## 3. Logistic regression model (single predictor)
+
+__Fit a logistic regression model using just primary cancer site (grouped_primary) as the sole predictor. Show the model output. Interpret the intercept and first coefficient (coefficient for breast cancer) in this model.__
+
+
+```{r}
+# recall to fit a logistic regression model we use glm(y ~ x1 + x2 + ..., data = data_name, family = binomial(link="logit"))
+# fit logistic regression model
+glmSite <- glm(early_mortality ~ grouped_primary, data = seer, family = binomial(link = "logit"))
+
+# print output
+summary(glmSite)
+```
+
+### Interpretation
+
+Intercept: the intercept of **-1.61** represents the log odds of the event with all predictors at 0. In the model, the reference is bladder cancer.
+
+Coefficient for breast cancer: The coefficient for breast cancer of **-1.12** represents the log odds ratio of early mortality for breast cancer compared to the reference category.
+
+
+## 4. Odds and odds ratios (model based)
+
+__Based on the model you fit above, estimate the odds of early mortality for people with bladder cancer, for people with breast cancer,__
+__and the odds ratio for early mortality comparing breast cancer to bladder cancer. How do these compare to the answers you got in part 2?__
+
+**calculations were done manually since I think LaTeX looks cool**
+
+Odds for breast cancer:
+$$\displaystyle{\displaylines{Odds_{breast} = e^{-1.61+-1.12} = 0.065}}$$
+
+Odds for bladder cancer:
+$$\displaystyle{\displaylines{Odds_{breast} = e^{-1.61} = 0.2}}$$
+
+Odds ratio:
+$$OR_{\text{Breast vs Reference}} = \frac{Odds_{\text{Breast}}}{Odds_{\text{Reference}}} = e^{-1.12} \approx 0.326$$
+
+These results are in line with the results from part 2.
+
+## 5. Logistic regression model (multiple predictors)
+
+__Now, in addition to primary cancer site, add sex, race, age, residency category, and income category to the model. Show the model output.__
+
+```{r}
+# fit model
+glmMulti <- glm(early_mortality ~ grouped_primary + sex + race + age + cat_res + income_cat, data = seer, family = binomial(link = "logit"))
+
+# print model output
+summary(glmMulti)
+```
+
+## 6. Interpret coefficients
+
+**Intercept:** The intercept of **-3.78** represents the log odds of early mortality for the reference category
+of each variable when all other predictors are held at their reference level.  
+
+**Coefficient for breast cancer:** The coefficient for breast cancer of **-0.797** represents the log odds ratio ratio of early mortality for patients with
+ breast cancer compared to the reference cancer type, holding all other variables constant.
+
+## 7. Predicted value
+
+__Using the model, estimate the probability of early mortality for a person with primary lung cancer who is male, Black, 60 years old, lives in an Urban area, and makes at least $65k a year.__
+
+
+```{r}
+# the seer dataset as it is was giving me trouble, so I made this one with the cat_res and income_cat columns explictly defined as factors
+seer2 <- seer %>%
+    mutate(
+        cat_res = as.factor(cat_res),
+        income_cat = as.factor(income_cat)
+    )
+# calculate predicted probability (note: this is different from the odds)
+new_individual <- data.frame(
+    grouped_primary = factor("Lung"),
+    sex = factor("Male"),
+    race = factor("Black"),
+    age = 60,
+    cat_res = factor("Urban"),
+    income_cat = factor("Below 65K")
+)
+
+predict(glmMulti, newdata = new_individual, type = "response")
+```
+
+
+
+## 8. Confidence intervals
+
+__Construct 95% confidence intervals on the log-odds scale and on the odds scale for all coefficients in the model (from part 5).__
+
+*Note: the code here might take a few seconds to run*
+
+```{r}
+# log scale
+confint_log_odds <- confint(glmMulti, level = 0.95)
+kable(confint_log_odds)
+
+# odds scale
+confint_odds <- confint_log_odds %>% exp()
+kable(confint_odds)
+```
+
+
+
+## 9.  Interactions
+
+__Add an interaction between sex and income category. Interpret the coefficient for this term in the model. What does it mean if it is positive?__
+
+```{r}
+# fit model with interaction
+glmInt <- glm(early_mortality ~ grouped_primary + sex + race + age + cat_res + income_cat + sex:income_cat, data = seer, family = binomial(link = "logit"))
+
+summary(glmInt)
+```
+
+**Interpretation:**
+The coefficient for the interaction term between sex and income category measures how the relationship between sex
+and the probability of early mortality changes across different levels of income category
+
+A positive coefficient suggests that the effect of being in the lower income category on the odds of early mortality is greater for females compared to males.
+
+## 10. Hypothesis Tests
+
+__Test for effect modification of income by sex (the interaction specified above) using both the Wald test statistic and likelihood ratio test. Interpret your results.__
+
+```{r}
+# likelihood ratio test
+lrtest(glmMulti, glmInt)
+
+# wald test
+waldtest(glmMulti, glmInt, test = "Chisq")
+```
+
+**Interpretation:**
+
+Wald Test: **p = 0.47**
+LR Test: **p = 0.47**
+
+The p-values for both the Wald Test and the LR Test are both above the significance threshold of p<0.05 and are nearly identical.  
+These results indicate that there is likely not effect modification present.
+
+## 11. Comparing Model Fit Metrics
+
+__Compare the deviance-based adjusted R-squared, deviance, AIC, and BIC values for each of the three models we have fit so far (only primary cancer site, all main effects, and all main effects plus interaction). Which model seems to perform the best based on these metrics? Use the model you think is best for the remainder of the lab.__
+
+
+```{r}
+# metrics of model fit
+
+# Extract AIC and BIC values
+aic_values <- c(AIC(glmSite), AIC(glmMulti), AIC(glmInt))
+bic_values <- c(BIC(glmSite), BIC(glmMulti), BIC(glmInt))
+
+# Extract Deviance
+deviance_values <- c(deviance(glmSite), deviance(glmMulti), deviance(glmInt))
+null_deviance_values <- c(glmSite$null.deviance, glmMulti$null.deviance, glmInt$null.deviance)
+n <- c(length(glmSite$fitted.values), length(glmMulti$fitted.values), length(glmInt$fitted.values))
+adj_r_squared_values <- 1 - (deviance_values / null_deviance_values) * ((n - 1) / (n - c(length(coef(glmSite)), length(coef(glmMulti)), length(coef(glmInt))) - 1))
+
+# Combine metrics into a data frame for comparison
+comparison_df <- data.frame(
+    Model = c("Only Primary Cancer Site", "All Main Effects", "All Main Effects + Interaction"),
+    AIC = aic_values,
+    BIC = bic_values,
+    Deviance = deviance_values,
+    Adjusted_R_Squared = adj_r_squared_values
+)
+
+kable(comparison_df)
+```
+
+
+**Interpretation and model choice:**
+The model containing all the main effects (glmMulti) appears to have the best fit based on all the criteria listed above.
+
+
+## 12. Collinearity
+
+__Check for collinearity in the model. Do you think collinearity is an issue in the model you chose?__
+
+
+```{r}
+# check for collinearity
+vif(glmMulti) %>% kable()
+```
+
+**Interpretation:**
+All VIF values are low, indicating low risk of collinearity.
+
+## 13. Linearity
+
+__Do you think non-linearity could be an issue in the model you chose? Assess this visually and interpret what you see.__
+
+
+```{r}
+# check for nonlinearity (hint: you don't need to do this for categorical variables)
+# making plot using age as it is the only continuous variable used in the model
+crPlots(glmMulti, terms = ~age)
+```
+
+**Interpretation:**
+The CR plot indicates that there is little evidence of non-linearity.
+
+## 14. Leverage and influential points
+
+__Assess if there are any high leverage or influential points in the model.__
+
+```{r}
+# check metrics of leverage and influence
+# hatvalues(glmMulti)
+
+influenceIndexPlot(glmMulti, c("Cook", "hat"))
+```
+
+**Interpretation:**
+There appear to be a few points in the model that are very influential based on the Cook's Distance plot, but, overall, there do not seem to be many influential points.
+The same appears true for high leverage points based on the HAT values plot.
+
+## 15. Hosmer-Lemeshow
+
+__Test if the model appears to fit well to the data. Interpret your results.__
+
+```{r}
+# test for goodness of fit
+hltest(glmMulti)
+```
+
+
+**Interpretation:**
+With **p=0.59**, we fail to reject the null hypothesis that the model does not fit well.
+
+
+```{r}
+sessionInfo()
+```
