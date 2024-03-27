@@ -13,6 +13,8 @@ output:
 ---
 
 ```{r setup, include=FALSE}
+require(knitr)
+
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(error = TRUE)
 ```
@@ -26,7 +28,7 @@ knitr::opts_chunk$set(error = TRUE)
 
 Load necessary packages. 
 
-```{r}
+```{r, message = FALSE}
 library(tidyverse)
 library(readxl)
 library(here)
@@ -36,6 +38,9 @@ library(glmnet)
 library(glmtoolbox)
 library(nnet)
 library(jtools)
+library(lintr)
+
+lint_dir(path = here("BIOSTLabs", ".lintr"))
 ```
 
 ## Data management
@@ -48,22 +53,19 @@ The aim of this lab is to explore race differences in self-reported hot flashes 
 
 
 ```{r}
-
 # read in the data
 # make age group a factor variable (otherwise it will read as numeric in regression models)
 
-hflash <- read_xlsx(here("Lab5", "hflash.xlsx"))
+hflash <- read_xlsx(here("Lab5", "hflash.xlsx")) %>%
+  mutate(
+    AgeGroup = factor(ageg - 1),
+    # making a column for race with a name that makes sense
+    Race = factor(aagrp)
+  ) %>%
+  # drop missing values
+  drop_na()
 
-
-
-# drop missing values
-
-# note: drop_na(df) doesn't save the data frame
-# if you want to drop the missing values and save the data so that no values are missing you have to save it with a name (either the same name as the data frame to update the data or a new name to indicate it is the complete cases only)
-
-# example:
-# df.complete = drop_na(df)
-
+kable(summary(hflash))
 ```
 
 # Data Analysis
@@ -73,15 +75,14 @@ hflash <- read_xlsx(here("Lab5", "hflash.xlsx"))
 __Fit a logistic regression model with race as the only predictor and self-reported hot flashes as the outcome. Is race significantly associated with the odds of self-reported hot flashes? Interpret the exponentiated coefficient for race in this model.__
 
 ```{r}
-
 # fit logistic regression model with just race
+glmRace <- glm(hotflash ~ Race, data = hflash, family = binomial(link = "logit"))
 
 # print model output
-
+summ(glmRace)
 
 # exponentiated coefficient
-
-
+exp(coef(glmRace))
 ```
 
 Interpretation:
@@ -91,12 +92,10 @@ Interpretation:
 __Fit a logistic regression model for self-reported hot flashes (outcome) using race, age group, education, smoking status, pcs12, obesity status, estradiol, FSH, LH, testosterone, and dehydroepiandrosterone sulfate as predictors. What happens to the estimated association between race and log-odds of self-reported hot flashes after adjusting for these variables?__
 
 ```{r}
-
 # fit logistic regression model with all predictors mentioned (not d1 (history of menopausal symptoms) or pt (patient id))
 
 
 # print output
-
 ```
 
 Response: 
@@ -106,7 +105,6 @@ Response:
 _Use the predicted probabilities from the fully adjusted model from part 2 to calculate the sensitivity and specificity using the thresholds 0.25, 0.5, and 0.75 to determine the predicted classes of each observation. What happens as you increase the threshold?__
 
 ```{r}
-
 # threshold 1 (0.25)
 
 
@@ -114,7 +112,6 @@ _Use the predicted probabilities from the fully adjusted model from part 2 to ca
 
 
 # threshold 3 (0.75)
-
 ```
 
 Response: 
@@ -125,15 +122,10 @@ Response:
 __Construct an ROC curve for the model. Display the ROC curve below and comment on what you see.__
 
 ```{r}
-
-
 # make roc curve
 # remember that the roc_curve function from the pROC function needs the observed outcomes and the predicted probabilities from the model
 
 # plot ROC curve
-
-
-
 ```
 
 What do you see?
@@ -144,8 +136,6 @@ __Calculate the area under the ROC curve (AUC). Interpret this value in the cont
 
 ```{r}
 # print the auc value
-
-
 ```
 
 Interpretation:
@@ -161,11 +151,10 @@ set.seed(1234)
 
 
 # using AUC as the measure of fit
-# reminder: to change the metric used, set type.measure to the metric you want (auc, deviance, etc.) 
+# reminder: to change the metric used, set type.measure to the metric you want (auc, deviance, etc.)
 # lasso
 
-# show output 
-
+# show output
 ```
 
 
@@ -178,10 +167,6 @@ __If we wanted to choose the biggest lambda penalty value that gives us an AUC w
 ```{r}
 # grab coefficients
 # reminder, you can use coef(name_of_model, "lambda.1se")
-
-
-
-
 ```
 
 Interpretation: 
@@ -196,7 +181,6 @@ __Fit the lasso model again, but this time use deviance as the model fit metric.
 
 
 # compare covariates kept in the model
-
 ```
 
 
@@ -205,13 +189,10 @@ __Fit the lasso model again, but this time use deviance as the model fit metric.
 __Now suppose we're more interested in statistical inference than prediction. Fit a propensity score model for race as the outcome using the remaining predictors from the model above. Which variables are related to race in the adjusted model?__
 
 ```{r}
-
 # fit the propensity score model
 
 
 # show model output
-
-
 ```
 
 Response: 
@@ -223,7 +204,6 @@ __Calculate the propensity scores using the model above. Use the propensity scor
 *Note: you can save the propensity scores form the model above as a new column in the data to use in the regression model*
 
 ```{r}
-
 # calculate and save propensity scores
 
 
@@ -231,8 +211,6 @@ __Calculate the propensity scores using the model above. Use the propensity scor
 
 
 # print output
-
-
 ```
 
 Interpretation: 
@@ -243,10 +221,7 @@ Interpretation:
 __Check the linearity condition (visually) for this model. Does it look like the linearity assumption holds?__
 
 ```{r}
-
 # check linearity condition
-
-
 ```
 
 Interpretation: 
@@ -269,8 +244,6 @@ __Break the propensity scores into quintiles (5 groups of roughly equal size) an
 
 
 # print output
-
-
 ```
 
 Interpretation: 
@@ -281,7 +254,6 @@ __Do we need to check the linearity in the model above (using quintiles)? Why or
 
 ```{r}
 # if yes, check linearity condition
-
 ```
 
 Answer: 
@@ -292,11 +264,7 @@ Answer:
 __Which model do you prefer of the four we've fit? The simple logistic regression model with just race, the multiple logistic regression adjusting for all covariates separately, the model adjusting for race and propensity score as a numeric variable, or the model adjusting for race and propensity score quintiles? Why?__
 
 ```{r}
-
 # feel free to check more model metrics here
-
-
-
 ```
 
 Response here:
@@ -317,9 +285,7 @@ __Summarize your findings. Was race associated with hot flashes? What about when
 
 
 ```{r}
-
 sessionInfo()
-
 ```
 
 
