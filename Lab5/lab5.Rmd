@@ -27,7 +27,7 @@ knitr::opts_chunk$set(error = TRUE)
 
 Load necessary packages. 
 
-```{r}
+```{r, message = FALSE}
 library(tidyverse)
 library(readxl)
 library(here)
@@ -58,17 +58,17 @@ The aim of this lab is to explore race differences in self-reported hot flashes 
 
 hflash <- read_xlsx(here("Lab5", "hflash.xlsx")) %>%
     mutate(
-        AgeGroup = factor(ageg - 1), # making dummy variable for age group
+        AgeGroup = factor(ageg - 1), # making dummy variable for age group with levels 0-3
+        aagrp = factor(aagrp), # changing categorical variables to factors to be safe
+        edu = factor(edu),
+        d1 = factor(d1),
+        f1a = factor(f1a),
+        hotflash = factor(hotflash),
+        bmi30 = factor(bmi30)
     ) %>%
     drop_na()
 
-kable(summary(hflash))
-
-# note: drop_na(df) doesn't save the data frame
-# if you want to drop the missing values and save the data so that no values are missing you have to save it with a name (either the same name as the data frame to update the data or a new name to indicate it is the complete cases only)
-
-# example:
-# df.complete = drop_na(df)
+kable(head(hflash))
 
 ```
 
@@ -94,7 +94,10 @@ Interpretation:
 
 ## 2. Multiple logistic regression model
 
-__Fit a logistic regression model for self-reported hot flashes (outcome) using race, age group, education, smoking status, pcs12, obesity status, estradiol, FSH, LH, testosterone, and dehydroepiandrosterone sulfate as predictors. What happens to the estimated association between race and log-odds of self-reported hot flashes after adjusting for these variables?__
+__Fit a logistic regression model for self-reported hot flashes (outcome) using race, age group,__
+__education, smoking status, pcs12, obesity status, estradiol, FSH, LH, testosterone, and__
+__dehydroepiandrosterone sulfate as predictors. What happens to the estimated association between__
+__race and log-odds of self-reported hot flashes after adjusting for these variables?__
 
 ```{r}
 
@@ -109,17 +112,37 @@ Response:
 
 ## 3. Sensitivity and specificity
 
-_Use the predicted probabilities from the fully adjusted model from part 2 to calculate the sensitivity and specificity using the thresholds 0.25, 0.5, and 0.75 to determine the predicted classes of each observation. What happens as you increase the threshold?__
+__Use the predicted probabilities from the fully adjusted model from part 2 to calculate the sensitivity__
+__and specificity using the thresholds 0.25, 0.5, and 0.75 to determine the predicted classes of each observation. What happens as you increase the threshold?__
 
 ```{r}
 
-# threshold 1 (0.25)
+y <- glmFull$y
+phat <- predict(glmFull, type = "response")
 
+# threshold 1 (0.25)
+thresh1 <- 0.25
+
+yhat1 <- as.numeric(phat > thresh1)
+
+data.frame(predicted = yhat1, observed = y) %>%
+  xtabs(~ predicted + observed, data = .)
 
 # threshold 2 (0.5)
+thresh2 <- 0.5
 
+yhat2 <- as.numeric(phat > thresh2)
+
+data.frame(predicted = yhat2, observed = y) %>%
+  xtabs(~ predicted + observed, data = .)
 
 # threshold 3 (0.75)
+thresh3 <- 0.75
+
+yhat3 <- as.numeric(phat > thresh1)
+
+data.frame(predicted = yhat3, observed = y) %>%
+  xtabs(~ predicted + observed, data = .)
 
 ```
 
@@ -131,14 +154,13 @@ Response:
 __Construct an ROC curve for the model. Display the ROC curve below and comment on what you see.__
 
 ```{r}
-
-
 # make roc curve
 # remember that the roc_curve function from the pROC function needs the observed outcomes and the predicted probabilities from the model
+roc_curve <- roc(response = y, predictor = phat)
 
-# plot ROC curve
-
-
+# plot
+plot(roc_curve, main = "ROC Curve for CHD", col = "blue")
+#ggroc(roc_curve)
 
 ```
 
@@ -150,7 +172,7 @@ __Calculate the area under the ROC curve (AUC). Interpret this value in the cont
 
 ```{r}
 # print the auc value
-
+auc(roc_curve)
 
 ```
 
