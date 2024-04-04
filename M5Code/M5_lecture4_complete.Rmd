@@ -1,0 +1,155 @@
+---
+title: 'M5 Lecture Code: Part IV'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Lecture 4
+
+## R packages
+
+Load necessary packages.
+
+```{r}
+library(tidyverse)
+library(here)
+library(readxl)
+library(arsenal)
+library(car)
+library(pROC)
+
+```
+
+## Data Management
+
+```{r}
+i_am("Notes/Module 5/M5_lecture4_complete.Rmd")
+
+prevend = read_csv(here("Notes","Datasets","prevend.csv"))
+
+prevend= prevend %>% 
+  mutate(Statin_f = factor(Statin, levels = c(0,1),labels=c("No","Yes")),
+         Education = factor(Education, levels= c(0,1,2,3),
+                            labels = c("Primary","Lower Secondary","Upper Secondary","University")),
+         Albuminuria.2 = factor(Albuminuria.2))
+
+```
+
+```{r}
+
+# RFFT by statin use
+prevend %>% 
+  ggplot(aes(x = Statin_f, y = RFFT)) +
+  geom_boxplot() + 
+  theme_bw() + 
+  labs(x = "Statin Use", title = "Ruff Figural Fluency Test Score by Statin Use")
+
+# unadjusted model
+unadjusted_fit <- lm(RFFT ~ Statin_f, data = prevend)
+# show output
+summary(unadjusted_fit)
+```
+
+
+## Propensity Score Model
+
+```{r}
+# model for propensity scores
+propensity_model <- glm(Statin_f ~ Age + Gender + Education + CVD + Smoking + DM + Hypertension + BMI + Albuminuria.1, data = prevend, family = binomial(link = "logit"))
+
+# output to see which variables were related
+summary(propensity_model)
+
+# calculate propensity scores using the model
+pscores = predict(propensity_model, type = "response")
+
+# split into quintiles
+pscores_cat = cut(pscores, 
+                   breaks = quantile(pscores, (0:5)/5), # cut at quintiles
+                   include.lowest = T, # keep lowest quintile
+                   labels = paste0("Q",1:5)) # change labels for readability
+
+# save scores in data frame
+prevend$pscore = pscores 
+prevend$pscore_cat = pscores_cat
+
+
+```
+
+
+
+```{r}
+# model adjusting for all covariates separately
+fit0 <- lm(RFFT ~ Statin_f + Age + Gender + Ethnicity + Education + CVD + Smoking + DM + Hypertension + BMI + Albuminuria.1, data = prevend)
+
+# model adjusting for propensity score
+fit1 <- lm(RFFT ~ Statin_f + pscore, data = prevend)
+
+# model adjusting for propensity score
+fit2 <- lm(RFFT ~ Statin_f + pscore_cat, data = prevend)
+
+# compare fully adjusted regression model, model with propensity scores as continuous, and with propensity scores as quintiles
+summary(fit0)
+crPlots(fit0, terms = ~ Age + BMI)
+
+# output 
+summary(fit1)
+
+# linearity
+crPlots(fit1,terms = ~pscore)
+plot(fit1, which = 1:2)
+# uh oh! looks like linearity assumption isn't met. We might not trust these results as much
+
+# output
+summary(fit2)
+# no linearity condition here since treatment and quintiles are all treated as categorical variables
+
+```
+
+
+```{r}
+# observed values
+y_obs = propensity_model$y
+# construct roc object
+roc_curve = roc(response = y_obs, predictor = pscores)
+
+# plot roc curve
+plot(roc_curve, grid = T, col = "blue")
+
+# print the auc value
+auc(roc_curve)
+
+# if you wanted to check for the sensitivity exactly...
+# find index of threshold used to get specificity as close as possible to 0.8
+index <- which.min(abs(roc_curve$specificities-0.8))
+# check that the specificity is close to 0.8
+roc_curve$specificities[index]
+# check with threshold gave us this specificity 
+roc_curve$thresholds[index]
+# check sensitivity using this threshold
+roc_curve$sensitivities[index]
+
+
+# check thresholds for 20% and 40% sensitivity
+# grab indices for thresholds that get us as close as possible to sensitivities of 0.2 and 0.4
+index1 <- which.min(abs(roc_curve$sensitivities-0.2))
+index2 <- which.min(abs(roc_curve$sensitivities-0.4))
+
+# thresholds
+paste0("Threshold for sensitivity = 0.2 : ", roc_curve$thresholds[index1])
+paste0("Threshold for sensitivity = 0.4 : ", roc_curve$thresholds[index2])
+
+# need a lower threshold for a higher sensitivity
+# what happens to the specificity at these points? lower for higher sensitivity
+paste0("Specificity when sensitivity = 0.2 : ", roc_curve$specificities[index1])
+paste0("Specificity when sensitivity = 0.4: ", roc_curve$specificities[index2])
+```

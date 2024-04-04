@@ -1,0 +1,32 @@
+
+Call:
+glm(formula = hotflash ~ aagrp + AgeGroup + edu + f1a + pcs12 + 
+    bmi30 + estra + fsh + lh + testo + dheas, family = binomial(link = "logit"), 
+    data = hflash)
+
+Coefficients:
+              Estimate Std. Error z value Pr(>|z|)   
+(Intercept) -0.6275298  0.9611552  -0.653  0.51383   
+aagrp1       0.3228104  0.2599201   1.242  0.21425   
+AgeGroup1    0.1957556  0.2754298   0.711  0.47725   
+AgeGroup2   -0.4171634  0.3672060  -1.136  0.25594   
+edu1        -0.4524099  0.3784447  -1.195  0.23191   
+f1a1         0.2372549  0.2560549   0.927  0.35415   
+pcs12       -0.0271167  0.0145811  -1.860  0.06293 . 
+bmi301       0.5962006  0.2641805   2.257  0.02402 * 
+estra        0.0008356  0.0045156   0.185  0.85320   
+fsh          0.0950561  0.0363034   2.618  0.00883 **
+lh           0.0423625  0.0569154   0.744  0.45669   
+testo        0.0035527  0.0118807   0.299  0.76492   
+dheas        0.0007223  0.0022992   0.314  0.75342   
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 449.47  on 361  degrees of freedom
+Residual deviance: 410.53  on 349  degrees of freedom
+AIC: 436.53
+
+Number of Fisher Scoring iterations: 4
+

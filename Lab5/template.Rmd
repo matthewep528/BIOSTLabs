@@ -1,0 +1,323 @@
+---
+title: "Lab 5 Template"
+author: "YOUR NAME HERE"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(error = TRUE)
+```
+
+
+
+
+# Lab Setup
+
+## R packages
+
+Load necessary packages. 
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(here)
+library(car)
+library(pROC)
+library(glmnet)
+library(glmtoolbox)
+library(nnet)
+
+```
+
+## Data management
+
+The following data description comes from https://www.causeweb.org/tshs/hot-flashes/: 
+
+Menopause heralds a complex array of hormonal and physiologic changes, the most common of which is the feverish discomfort of hot flashes and often accompanied by sweating, chills and anxiety. The Mayo Clinic defines a hot flash as the “sudden feeling of warmth in the upper body which is usually most intense over the face, neck and chest”. Among women in the menopausal transition, hot flashes typically occur daily, are between 2-5 minutes duration, and can be expected to persist for more than 7 years  Variations in hot flash experiences during the menopausal transition among different populations have been observed but are incompletely understood.
+
+The aim of this lab is to explore race differences in self-reported hot flashes while considering other factors such as demographic information, BMI, reproductive hormone levels, and smoking.
+
+
+```{r}
+
+# read in the data
+# make age group a factor variable (otherwise it will read as numeric in regression models)
+
+
+
+
+
+# drop missing values
+
+# note: drop_na(df) doesn't save the data frame
+# if you want to drop the missing values and save the data so that no values are missing you have to save it with a name (either the same name as the data frame to update the data or a new name to indicate it is the complete cases only)
+
+# example:
+# df.complete = drop_na(df)
+
+```
+
+# Data Analysis
+
+## 1. Simple logistic regression model
+
+__Fit a logistic regression model with race as the only predictor and self-reported hot flashes as the outcome. Is race significantly associated with the odds of self-reported hot flashes? Interpret the exponentiated coefficient for race in this model.__
+
+```{r}
+
+# fit logistic regression model with just race
+
+# print model output
+
+
+# exponentiated coefficient
+
+
+```
+
+Interpretation:
+
+## 2. Multiple logistic regression model
+
+__Fit a logistic regression model for self-reported hot flashes (outcome) using race, age group, education, smoking status, pcs12, obesity status, estradiol, FSH, LH, testosterone, and dehydroepiandrosterone sulfate as predictors. What happens to the estimated association between race and log-odds of self-reported hot flashes after adjusting for these variables?__
+
+```{r}
+
+# fit logistic regression model with all predictors mentioned (not d1 (history of menopausal symptoms) or pt (patient id))
+
+
+# print output
+
+```
+
+Response: 
+
+## 3. Sensitivity and specificity
+
+_Use the predicted probabilities from the fully adjusted model from part 2 to calculate the sensitivity and specificity using the thresholds 0.25, 0.5, and 0.75 to determine the predicted classes of each observation. What happens as you increase the threshold?__
+
+```{r}
+
+# threshold 1 (0.25)
+
+
+# threshold 2 (0.5)
+
+
+# threshold 3 (0.75)
+
+```
+
+Response: 
+
+
+## 4. ROC curve
+
+__Construct an ROC curve for the model. Display the ROC curve below and comment on what you see.__
+
+```{r}
+
+
+# make roc curve
+# remember that the roc_curve function from the pROC function needs the observed outcomes and the predicted probabilities from the model
+
+# plot ROC curve
+
+
+
+```
+
+What do you see?
+
+## 5. AUC 
+
+__Calculate the area under the ROC curve (AUC). Interpret this value in the context of how cases tend to be ranked by the model compared to controls.__
+
+```{r}
+# print the auc value
+
+
+```
+
+Interpretation:
+
+## 6. Shrinkage methods
+
+__We're worried we may have overfit in the model above. Fit a cross-validated lasso logistic regression model to help account for possible overfitting. Use AUC as the metric of model fit. What happens to the AUC compared to the AUC calculated in part 11? Why do you think that is?__
+
+```{r}
+# cross-validation randomly splits the data, so setting the seed helps make sure you always get the same results (reproducibility)
+set.seed(1234)
+
+
+
+# using AUC as the measure of fit
+# reminder: to change the metric used, set type.measure to the metric you want (auc, deviance, etc.) 
+# lasso
+
+# show output 
+
+```
+
+
+Interpretation: 
+
+## 7. Which variables were kept?
+
+__If we wanted to choose the biggest lambda penalty value that gives us an AUC within 1 standard error of the best AUC using the lasso method (lambda.1se), which covariates are kept in the model? Is race kept in the model?  Is this consistent with what we saw in part 2?__ 
+
+```{r}
+# grab coefficients
+# reminder, you can use coef(name_of_model, "lambda.1se")
+
+
+
+
+```
+
+Interpretation: 
+
+
+## 8. Lasso with deviance
+
+__Fit the lasso model again, but this time use deviance as the model fit metric. Compare the coefficients left in this model (again using "lambda.1se") to the model using AUC to choose the best fitting model. What do you notice? Which method (metric) of choosing a model would you want to use if your main goal was classification?__
+
+```{r}
+# lasso with deviance
+
+
+# compare covariates kept in the model
+
+```
+
+
+## 9. Propensity Score Model
+
+__Now suppose we're more interested in statistical inference than prediction. Fit a propensity score model for race as the outcome using the remaining predictors from the model above. Which variables are related to race in the adjusted model?__
+
+```{r}
+
+# fit the propensity score model
+
+
+# show model output
+
+
+```
+
+Response: 
+
+## 10. Adjusting for propensity scores
+
+__Calculate the propensity scores using the model above. Use the propensity scores as a predictor, along with race, in a model for self-reported hot flashes. Interpret the coefficients in the model.__
+
+*Note: you can save the propensity scores form the model above as a new column in the data to use in the regression model*
+
+```{r}
+
+# calculate and save propensity scores
+
+
+# fit model
+
+
+# print output
+
+
+```
+
+Interpretation: 
+
+
+## 11. Check Linearity
+
+__Check the linearity condition (visually) for this model. Does it look like the linearity assumption holds?__
+
+```{r}
+
+# check linearity condition
+
+
+```
+
+Interpretation: 
+
+## 12. Propensity Score Quintiles
+
+__Break the propensity scores into quintiles (5 groups of roughly equal size) and use this as a categorical predictor of self-reported hot flashes in addition to race. Interpret the coefficients in this model.__
+
+```{r}
+# split propensity scores into quintiles
+# To cute the data into quintiles we can use the cut() function
+# with breaks = quantile(your_propensity_scores, probs = (0:5)/5)
+# make sure to use argument include.lowest = T
+
+
+
+
+
+# fit model
+
+
+# print output
+
+
+```
+
+Interpretation: 
+
+## 13.  Linearity Condition
+
+__Do we need to check the linearity in the model above (using quintiles)? Why or why not? If yes, check the linearity condition (visually).__
+
+```{r}
+# if yes, check linearity condition
+
+```
+
+Answer: 
+
+
+## 14. Compare Models
+
+__Which model do you prefer of the four we've fit? The simple logistic regression model with just race, the multiple logistic regression adjusting for all covariates separately, the model adjusting for race and propensity score as a numeric variable, or the model adjusting for race and propensity score quintiles? Why?__
+
+```{r}
+
+# feel free to check more model metrics here
+
+
+
+```
+
+Response here:
+
+
+
+
+
+
+
+
+## 15. Summary
+
+__Summarize your findings. Was race associated with hot flashes? What about when other covariates were adjusted for? Did the model do a good job classifying those with and without hot flashes?__
+
+
+
+
+
+```{r}
+
+sessionInfo()
+
+```
+
+
+
