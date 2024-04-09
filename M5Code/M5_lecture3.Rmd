@@ -1,0 +1,164 @@
+---
+title: 'Module 5 Lecture Code: Part III'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Lecture 3
+
+## R packages
+
+Load necessary packages.
+
+```{r}
+library(tidyverse)
+library(here)
+library(readxl)
+library(nnet) # new package for multinomial regression
+library(car)
+library(generalhoslem)
+```
+
+## Data Management
+
+```{r}
+
+i_am("Notes/Module 5/M5_lecture3.Rmd")
+
+# read in data
+df <- read_csv(here("Notes","Datasets","sysdsn1.csv")) %>%
+  drop_na(insure, age, ) %>%
+  mutate(insure = factor(insure, levels = c("Indemnity","Prepaid","Uninsure")),
+         site = factor(site, levels = 1:3))
+
+# skim data
+skimr::skim(df)
+
+```
+
+
+# Multinomial Logistic Regression
+
+## Fitting the Model
+
+```{r}
+
+# multinom() is a function in the `nnet` package
+# fit multinomial logistic regression model with age as only predictor
+fit1 <- multinom(insure ~ age, data = df)
+
+# output
+summary(fit1)
+
+# alternative to print output 
+broom::tidy(fit1, conf.int = T)
+
+
+
+```
+
+## Predicted Probabilities
+
+```{r}
+# this gives you the predicted outcome category (with highest probability)
+# just show first 6
+predict(fit1)[1:6]
+
+# this gives you the probability of each outcome for each observation
+predict(fit1, type = "probs")[1:6,]
+
+```
+
+
+## Hypothesis Testing
+
+```{r}
+# fit multinomial logistic regression model with age, sex, race, and site
+fit2 <- multinom(insure ~ age + male + nonwhite + site, data = df)
+
+# print output
+summary(fit2)
+
+
+# compare models
+anova(fit1, fit2)
+
+# fit null model to get log-likelihood for the intercept-only model
+fitnull <- multinom(insure ~ 1, data = df)
+
+# by hand
+1 - deviance(fit2)/deviance(fitnull)
+
+# using `pscl` package
+pscl::pR2(fit2)
+
+
+
+```
+
+
+
+
+```{r}
+# from `generalhoslem` package
+# obs is the observed outcomes, exp is the expected values, g is the number of groups, ord = F tells R that the outcome is not ordinal
+# make sure the lengths are the same (check for any missing values)
+logitgof(obs = df$insure, exp = fitted(fit2), g = 10 , ord = F )
+
+
+```
+# Ordinal Logistic Regression
+
+## Read in data
+
+```{r}
+tumor <- read_excel(here("Notes","Datasets","BloodStorage.xlsx")) %>%
+  mutate(TVol = factor(TVol, levels = 1:3, labels = c("Low","Medium","Extensive"))) %>%
+  drop_na(TVol, PreopPSA)
+
+```
+
+
+## Fitting the model
+
+```{r}
+
+
+fit.olr <- MASS::polr(TVol ~ PreopPSA,
+                      data = tumor)
+summary(fit.olr)
+fit.olr$coefficients
+fit.olr$zeta
+
+phats = predict(fit.olr, 
+                newdata = data.frame(PreopPSA = c(10,11)), 
+                type = "probs") 
+
+rownames(phats) = c("PSA 10", "PSA 11")
+
+phats
+
+# by hand
+exp(-0.5245705 -.120338*10); exp(1.8465601 -.120338*10)
+exp(-0.5245705 -.120338*11); exp(1.8465601 -.120338*11)
+
+cumulative_probs = t(apply(phats, MARGIN=1, FUN = cumsum))
+cumulative_probs
+
+cumulative_odds1 = cumulative_probs[,1]/(1-cumulative_probs[,1])
+cumulative_odds1[2]/cumulative_odds1[1]
+
+cumulative_odds2 = cumulative_probs[,2]/(1-cumulative_probs[,2])
+cumulative_odds2[2]/cumulative_odds2[1]
+
+exp(-fit.olr$coefficients)
+```

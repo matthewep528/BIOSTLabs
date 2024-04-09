@@ -52,45 +52,47 @@ The aim of this lab is to explore race differences in self-reported hot flashes 
 
 
 ```{r}
-
 # read in the data
 # make age group a factor variable (otherwise it will read as numeric in regression models)
 
 hflash <- read_xlsx(here("Lab5", "hflash.xlsx")) %>%
-    mutate(
-        AgeGroup = factor(ageg - 1), # making dummy variable for age group with levels 0-3
-        aagrp = factor(aagrp), # changing categorical variables to factors to be safe
-        edu = factor(edu),
-        d1 = factor(d1),
-        f1a = factor(f1a),
-        hotflash = factor(hotflash),
-        bmi30 = factor(bmi30)
-    ) %>%
-    drop_na()
+  mutate(
+    AgeGroup = factor(ageg - 1), # making dummy variable for age group with levels 0-3
+    aagrp = factor(aagrp), # changing categorical variables to factors to be safe
+    edu = factor(edu),
+    d1 = factor(d1),
+    f1a = factor(f1a),
+    hotflash = factor(hotflash),
+    bmi30 = factor(bmi30)
+  ) %>%
+  drop_na()
 
 kable(head(hflash))
-
 ```
 
 # Data Analysis
 
 ## 1. Simple logistic regression model
 
-__Fit a logistic regression model with race as the only predictor and self-reported hot flashes as the outcome. Is race significantly associated with the odds of self-reported hot flashes? Interpret the exponentiated coefficient for race in this model.__
+__Fit a logistic regression model with race as the only predictor and self-reported hot flashes as the outcome.__
+__Is race significantly associated with the odds of self-reported hot flashes? Interpret the exponentiated coefficient for race in this model.__
 
 ```{r}
-
 # fit logistic regression model with just race
 glmRace <- glm(hotflash ~ aagrp, data = hflash, family = binomial(link = "logit"))
 # print model output
 summ(glmRace)
 
+sink("glm1.txt")
+summary(glmRace)
+sink()
 # exponentiated coefficient
 exp(coef(glmRace))
-
 ```
 
-Interpretation:
+Interpretation: With the p-value of race being **0.005**, we have evidence that it is significantly associated with the odds of self-reported hot flashes.
+The exponentiated coefficient of **1.89** means that African American women have about **1.894 times higher odds** of reporting hot flashes compared to Caucasian women, 
+given that all other variables in the model are held constant.
 
 ## 2. Multiple logistic regression model
 
@@ -100,15 +102,21 @@ __dehydroepiandrosterone sulfate as predictors. What happens to the estimated as
 __race and log-odds of self-reported hot flashes after adjusting for these variables?__
 
 ```{r}
-
 # fit logistic regression model with all predictors mentioned (not d1 (history of menopausal symptoms) or pt (patient id))
 glmFull <- glm(hotflash ~ aagrp + AgeGroup + edu + f1a + pcs12 + bmi30 + estra + fsh + lh + testo + dheas, data = hflash, family = binomial(link = "logit"))
 
 # print output
 summ(glmFull)
+
+sink("glmFull.txt")
+summary(glmFull)
+sink()
+
+exp(coef(glmFull))
 ```
 
-Response: 
+Response: After adjusting for all the added variables in the full model, the coefficient for race dropped from **0.639 to 0.323 (p=0.21)**.  
+This indicates that, after adjustment, race is no longer significantly associated with self reported hot flashes.
 
 ## 3. Sensitivity and specificity
 
@@ -116,6 +124,7 @@ __Use the predicted probabilities from the fully adjusted model from part 2 to c
 __and specificity using the thresholds 0.25, 0.5, and 0.75 to determine the predicted classes of each observation. What happens as you increase the threshold?__
 
 ```{r}
+sink("part3.txt")
 
 y <- glmFull$y
 phat <- predict(glmFull, type = "response")
@@ -139,14 +148,35 @@ data.frame(predicted = yhat2, observed = y) %>%
 # threshold 3 (0.75)
 thresh3 <- 0.75
 
-yhat3 <- as.numeric(phat > thresh1)
+yhat3 <- as.numeric(phat > thresh3)
 
 data.frame(predicted = yhat3, observed = y) %>%
   xtabs(~ predicted + observed, data = .)
 
+sink()
 ```
 
-Response: 
+Response:  
+  
+**Threshold of 0.25:**  
+Predicted no hot flashes: 123 correctly, 126 incorrectly (false negatives)  
+Predicted hot flashes: 33 correctly, 1 incorrectly (false positives)  
+Sensitivity: High, as it catches most of the true positives.  
+Specificity: Low, because it has many false negatives.  
+
+**Threshold of 0.5:**  
+Predicted no hot flashes: 237 correctly, 12 incorrectly (false negatives)  
+Predicted hot flashes: 26 correctly, 87 incorrectly (false positives)  
+Sensitivity: Medium, as it misses some true positives.  
+Specificity: Medium, as it also has a significant number of false positives.  
+
+**Threshold of 0.75:**  
+Predicted no hot flashes: 249 correctly, 1 incorrectly (false negatives)  
+Predicted hot flashes: 4 correctly, 109 incorrectly (false positives)  
+Sensitivity: Very low, as it contains a very large amount of false positives.  
+Specificity: Extremely high, since it almost never predicts hot flashes incorrectly.  
+    
+As the threshold increases, sensitivity decreases while specificity increases.
 
 
 ## 4. ROC curve
@@ -160,11 +190,11 @@ roc_curve <- roc(response = y, predictor = phat)
 
 # plot
 plot(roc_curve, main = "ROC Curve for CHD", col = "blue")
-#ggroc(roc_curve)
-
+# ggroc(roc_curve)
 ```
 
 What do you see?
+The curve is abvove random classifier performance but is not very close to the ideal top-left corner of the graph.
 
 ## 5. AUC 
 
@@ -173,97 +203,122 @@ __Calculate the area under the ROC curve (AUC). Interpret this value in the cont
 ```{r}
 # print the auc value
 auc(roc_curve)
-
 ```
 
 Interpretation:
+The AUC of 0.6838 indicates fair discrimination.
 
 ## 6. Shrinkage methods
 
-__We're worried we may have overfit in the model above. Fit a cross-validated lasso logistic regression model to help account for possible overfitting. Use AUC as the metric of model fit. What happens to the AUC compared to the AUC calculated in part 11? Why do you think that is?__
+__We're worried we may have overfit in the model above. Fit a cross-validated lasso logistic regression model to help account for possible overfitting.__
+__Use AUC as the metric of model fit. What happens to the AUC compared to the AUC calculated in part 11? Why do you think that is?__
 
 ```{r}
 # cross-validation randomly splits the data, so setting the seed helps make sure you always get the same results (reproducibility)
 set.seed(1234)
 
+lassoX <- model.matrix(hotflash ~ aagrp + AgeGroup + edu + f1a + pcs12 + bmi30 + estra + fsh + lh + testo + dheas - 1, data = hflash)
+lassoY <- hflash$hotflash
 
+lasso <- cv.glmnet(x = lassoX, y = lassoY, family = "binomial", alpha = 1, type.measure = "auc")
+
+lasso
+max(lasso$cvm)
+
+plot(lasso)
 
 # using AUC as the measure of fit
 # reminder: to change the metric used, set type.measure to the metric you want (auc, deviance, etc.)
 # lasso
 
-# show output 
-
+# show output
 ```
 
 
-Interpretation: 
+Interpretation: The AUC goes down slightly (0.6838 vs 0.6339), likely due to overfitting. The performance is still fair.
 
 ## 7. Which variables were kept?
 
-__If we wanted to choose the biggest lambda penalty value that gives us an AUC within 1 standard error of the best AUC using the lasso method (lambda.1se), which covariates are kept in the model? Is race kept in the model?  Is this consistent with what we saw in part 2?__ 
+__If we wanted to choose the biggest lambda penalty value that gives us an AUC within 1 standard error of the best AUC using the lasso method (lambda.1se),__
+__which covariates are kept in the model? Is race kept in the model?  Is this consistent with what we saw in part 2?__ 
 
 ```{r}
 # grab coefficients
+coef_lasso_1se <- coef(lasso, "lambda.1se")
+print(coef_lasso_1se)
+
 # reminder, you can use coef(name_of_model, "lambda.1se")
-
-
-
-
 ```
 
 Interpretation: 
-
+The covariates remaining in the model are **pcs12, bmi30, and fsh**. Race is no longer part of the model. This is consistent with part 2 as
+the p-value for race was above the significance threshold.
 
 ## 8. Lasso with deviance
 
-__Fit the lasso model again, but this time use deviance as the model fit metric. Compare the coefficients left in this model (again using "lambda.1se") to the model using AUC to choose the best fitting model. What do you notice? Which method (metric) of choosing a model would you want to use if your main goal was classification?__
+__Fit the lasso model again, but this time use deviance as the model fit metric.__
+__Compare the coefficients left in this model (again using "lambda.1se") to the model using AUC to choose the best fitting model.__
+__What do you notice? Which method (metric) of choosing a model would you want to use if your main goal was classification?__
 
 ```{r}
 # lasso with deviance
+lassoDev <- cv.glmnet(lassoX, lassoY, family = "binomial", alpha = 1, type.measure = "deviance")
 
-
+coef_lasso_dev <- coef(lassoDev, s = "lambda.1se")
+print(coef_lasso_dev)
 # compare covariates kept in the model
-
 ```
+
+The covariates the in deviance model are the same as in the AUC model. Since they are retained in both models, it is suggested that they are robustly associated
+with the outcome of self-reported hot flashes.  
+A metric using AUC would be more appropriate for the goal of classification.
 
 
 ## 9. Propensity Score Model
 
-__Now suppose we're more interested in statistical inference than prediction. Fit a propensity score model for race as the outcome using the remaining predictors from the model above. Which variables are related to race in the adjusted model?__
+__Now suppose we're more interested in statistical inference than prediction. Fit a propensity score model for race as the outcome using__
+__the remaining predictors from the model above. Which variables are related to race in the adjusted model?__
 
 ```{r}
-
 # fit the propensity score model
-
+glmProp <- glm(aagrp ~ pcs12 + bmi30 + fsh, family = binomial(link = "logit"), data = hflash)
 
 # show model output
+summ(glmProp)
 
-
+sink("prop model.txt")
+summary(glmProp)
+sink()
 ```
 
 Response: 
+pcs12 and bmi30 are related to race in this model (**p=0.001 and p<0.001, respectively)
 
 ## 10. Adjusting for propensity scores
 
-__Calculate the propensity scores using the model above. Use the propensity scores as a predictor, along with race, in a model for self-reported hot flashes. Interpret the coefficients in the model.__
+__Calculate the propensity scores using the model above. Use the propensity scores as a predictor, along with race, in a model for self-reported hot flashes.__
+__Interpret the coefficients in the model.__
 
 *Note: you can save the propensity scores form the model above as a new column in the data to use in the regression model*
 
 ```{r}
-
 # calculate and save propensity scores
-
+hflash$propensity_score <- predict(glmProp, type = "response")
 
 # fit model
-
+glmRaceProp <- glm(hotflash ~ aagrp + propensity_score, family = binomial, data = hflash)
 
 # print output
+summ(glmRaceProp)
 
-
+sink("glmRaceProp.txt")
+summary(glmRaceProp)
+sink()
 ```
 
 Interpretation: 
+**Race**: coefficent = 0.345, p=0.16. This indicates that race is not a statistically significant predictor  
+**Propensity Score**: coefficent = 2.732, p=<0.001. This means that the log odds of self-reported hot flashes increase by 2.732 for every increase in the propensity score.
 
 
 ## 11. Check Linearity
@@ -271,37 +326,45 @@ Interpretation:
 __Check the linearity condition (visually) for this model. Does it look like the linearity assumption holds?__
 
 ```{r}
-
 # check linearity condition
+residuals <- glmRaceProp$residuals
 
-
+crPlots(glmRaceProp, terms = ~propensity_score)
 ```
 
 Interpretation: 
+The lines deviate from each other, implying violation of the linearity condition.
 
 ## 12. Propensity Score Quintiles
 
-__Break the propensity scores into quintiles (5 groups of roughly equal size) and use this as a categorical predictor of self-reported hot flashes in addition to race. Interpret the coefficients in this model.__
+__Break the propensity scores into quintiles (5 groups of roughly equal size) and use this as a categorical predictor of self-reported hot flashes in addition to race.__
+__Interpret the coefficients in this model.__
 
 ```{r}
 # split propensity scores into quintiles
-# To cute the data into quintiles we can use the cut() function
+# To cut the data into quintiles we can use the cut() function
 # with breaks = quantile(your_propensity_scores, probs = (0:5)/5)
 # make sure to use argument include.lowest = T
 
-
-
-
+hflash <- hflash %>%
+  mutate(pQuintiles = ntile(propensity_score, 5))
 
 # fit model
-
+glmQuint <- glm(hotflash ~ aagrp + factor(pQuintiles), data = hflash, family = binomial)
 
 # print output
+summ(glmQuint)
 
+sink("glmQuintiles.txt")
+summary(glmQuint)
+sink()
 
+crPlots(glmQuint)
 ```
 
-Interpretation: 
+Interpretation:  
+Only the fifth quintile of the propensity scores was significantly associated with self-reported hot-flashes **(coef=1.02, p=0.01)**.
+This means that the fifth quintile of the propensity score has an increase of 1.02 in log odds of self-reported hot flashes compared to the first quintile.
 
 ## 13.  Linearity Condition
 
@@ -309,45 +372,42 @@ __Do we need to check the linearity in the model above (using quintiles)? Why or
 
 ```{r}
 # if yes, check linearity condition
-
 ```
 
-Answer: 
+Answer: We do not need to check the linearity in the model. After changing the propensity score component from a continuous variable to quintiles (categorical),
+there is no longer a continous predictor in the model.
 
 
 ## 14. Compare Models
 
-__Which model do you prefer of the four we've fit? The simple logistic regression model with just race, the multiple logistic regression adjusting for all covariates separately, the model adjusting for race and propensity score as a numeric variable, or the model adjusting for race and propensity score quintiles? Why?__
+__Which model do you prefer of the four we've fit? The simple logistic regression model with just race,__
+__the multiple logistic regression adjusting for all covariates separately, the model adjusting for race and propensity score as a numeric variable,__
+__or the model adjusting for race and propensity score quintiles? Why?__
 
 ```{r}
-
-# feel free to check more model metrics here
-
-
-
+predictedQuint <- predict(glmQuint, type = "response")
+rocQuint <- roc(hflash$hotflash, predictedQuint)
+auc(rocQuint)
 ```
 
-Response here:
-
-
-
-
-
-
+Response here: I prefer the model using propensity score quintiles. It's simpler than the full model but adjusts for confounders better than the simple model.
+Using the quintiles for the propensity scores also solves the problem of non-linearity that is present in the model using p-scores as a continuous predictor.
 
 
 ## 15. Summary
 
-__Summarize your findings. Was race associated with hot flashes? What about when other covariates were adjusted for? Did the model do a good job classifying those with and without hot flashes?__
+__Summarize your findings. Was race associated with hot flashes? What about when other covariates were adjusted for?__
+__Did the model do a good job classifying those with and without hot flashes?__
 
-
+In the simple model, race appeared to be a significant predictor of self-reported hot flashes, but upon adjusting for other variables, that was found
+to no longer be the case. Adjusting for confounders and then filtering them through cross-validation revealed BMI30, pcs12, and fsh were found to be
+significant predictors. pcs12 and bmi30 were found to be associated with race using a propensity score model. As the linearity condition was not met using
+p-scores as a continuous variable, they were broken up into categorical quintiles. With an AUC of 0.6412, the chosen model has fair classification performance.
 
 
 
 ```{r}
-
 sessionInfo()
-
 ```
 
 
