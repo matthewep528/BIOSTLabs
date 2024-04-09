@@ -1,15 +1,19 @@
 ---
-title: "Lab 6 Template"
-author: "YOUR NAME HERE"
+title: "M6 Lab"
+author: "Matthew Præstgaard"
+date: "Spring 2024"
 output:
-  html_document:
-    df_print: paged
-    toc: true
-    toc_depth: '3'
-    code_folding: show
+  rmdformats::downcute:
+    self_contained: true
+    default_style: "dark"
+    downcute_theme: "default"
+    code_folding: "show"
+  svglite:
+    fig.retina: 2
 ---
 
 ```{r setup, include=FALSE}
+require(knitr)
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(error = TRUE)
 ```
@@ -21,14 +25,15 @@ knitr::opts_chunk$set(error = TRUE)
 
 Load necessary packages. 
 
-```{r}
+```{r, message = FALSE}
 library(tidyverse)
 library(here)
 library(MASS)
 library(pscl)
 library(lmtest)
 library(car)
-
+library(ggpubr)
+library(kableExtra)
 ```
 
 ## Data management
@@ -38,10 +43,13 @@ The data were obtained from a survey that was aimed to investigate the factors a
 
 
 ```{r}
-
 # read in data
+data <- read_csv(here("Lab6", "hw6.csv")) %>%
+  drop_na() %>%
+  mutate(
+    healthStat = factor(health - 1)
+  )
 # turn health status into a factor variable so it doesn't get treated as a numeric 1, 2, 3
-
 ```
 
 
@@ -50,13 +58,10 @@ The data were obtained from a survey that was aimed to investigate the factors a
 __Generate a histogram of the outcome variable and comment on the shape. Summarize the outcome variable using summary statistics. Based on these two analyses, is linear regression appropriate? What type of regression do you think is necessary to answer the remaining questions? Why?__
 
 ```{r}
-
 # histogram of outcome
 
 
 # summary statistics
-
-
 ```
 
 Description: 
@@ -66,12 +71,10 @@ Description:
 __Fit a Poisson model that estimates the expected number of physician office visits adjusting for health status, sex, race, condition of limiting activities of living, race, private insurance information, age, chronic conditions, and education. Show the output and interpret the coefficient for the chronic conditions variable. Which variables appear to be associated with the outcome?__  
 
 ```{r}
-
 # Poisson model
 # glm(y ~ x1 + x2 + ..., data = data_name, family = poisson(link = "log"))
 
 # show model output
-
 ```
 
 Interpretation: 
@@ -82,10 +85,7 @@ Interpretation:
 __Evaluate the fit of this model. Are the assumptions for Poisson model met?__
 
 ```{r}
-
 # evaluate model assumptions
-
-
 ```
 
 Interpretation: 
@@ -103,14 +103,11 @@ Response:
 __Fit a negative binomial regression model using the same variables as the Poisson model above. Show the model output. Are there any differences between the trends found in this model and the trends found in the Poisson model in part 2? Why do you think that is?__
 
 ```{r}
-
 # fit negative binomial model
 # from the MASS package: glm.nb(y ~ x1 + x2 + ...., data = data_name)
 
 
 # show model output
-
-
 ```
 
 Response: 
@@ -120,10 +117,7 @@ Response:
 __Run a likelihood ratio test to compare the Poisson and negative binomial models. What does this test tell us?__
 
 ```{r}
-
 # likelihood ratio test
-
-
 ```
 
 Response: 
@@ -138,11 +132,8 @@ __Using the model you picked, how much higher would the log of the expected numb
 
 
 ```{r}
-
 # you can do this by hand using the coefficients printed out by summary
 # you can also grab the coefficients from the model using model_name$coefficients and manipulating this vector the get the values you want
-
-
 ```
 
 
@@ -151,9 +142,6 @@ __Using the model you picked, how much higher would the log of the expected numb
 __Exponentiate the number you got in part 8 and interpret this value in terms of the expected number of of visits comparing the person with 1 chronic condition to the person with no chronic conditions.__
 
 ```{r}
-
-
-
 
 ```
 
@@ -164,11 +152,9 @@ Interpretation:
 __Using the model you picked above, add an interaction term between private insurance and chronic conditions. Using the model outcome, calculate the same comparisons as in parts 8 and 9 for people with insurance and for people without insurance. Interpret the coefficients for chronic conditions, private insurance, and their interaction in this model.__
 
 ```{r}
-
 # model with interaction
 
 # show output
-
 ```
 
 
@@ -178,10 +164,7 @@ __Test if the association between chronic conditions and number of visits is mod
 
 
 ```{r}
-
 # likelihood ratio test
-
-
 ```
 
 Interpretation: 
@@ -191,10 +174,7 @@ Interpretation:
 __Assess the model fit from the model you picked. Are there any problematic points that you're worried about?__
 
 ```{r}
-
 # check model fit/problematic points
-
-
 ```
 
 Interpretation:
@@ -210,9 +190,7 @@ Response:
 __Are you concerned at all about zero-inflation in the model you chose? Why or why not?__
 
 ```{r}
-
 # checking for zero-inflation
-
 ```
 
 Response: 
