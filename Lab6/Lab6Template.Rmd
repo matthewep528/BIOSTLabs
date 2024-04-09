@@ -1,0 +1,233 @@
+---
+title: "Lab 6 Template"
+author: "YOUR NAME HERE"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(error = TRUE)
+```
+
+
+# Lab Setup
+
+## R packages
+
+Load necessary packages. 
+
+```{r}
+library(tidyverse)
+library(here)
+library(MASS)
+library(pscl)
+library(lmtest)
+library(car)
+
+```
+
+## Data management
+
+The data were obtained from a survey that was aimed to investigate the factors associated with the number of physician office visits over the past two years. The surveys contain interview from 2,500 people in the United States. They include demographics, health condition, and insurance information of each interviewee.
+
+
+
+```{r}
+
+# read in data
+# turn health status into a factor variable so it doesn't get treated as a numeric 1, 2, 3
+
+```
+
+
+## 1. Visualize Data
+
+__Generate a histogram of the outcome variable and comment on the shape. Summarize the outcome variable using summary statistics. Based on these two analyses, is linear regression appropriate? What type of regression do you think is necessary to answer the remaining questions? Why?__
+
+```{r}
+
+# histogram of outcome
+
+
+# summary statistics
+
+
+```
+
+Description: 
+
+## 2. Poisson model
+
+__Fit a Poisson model that estimates the expected number of physician office visits adjusting for health status, sex, race, condition of limiting activities of living, race, private insurance information, age, chronic conditions, and education. Show the output and interpret the coefficient for the chronic conditions variable. Which variables appear to be associated with the outcome?__  
+
+```{r}
+
+# Poisson model
+# glm(y ~ x1 + x2 + ..., data = data_name, family = poisson(link = "log"))
+
+# show model output
+
+```
+
+Interpretation: 
+
+
+## 3. Model Assumptions
+
+__Evaluate the fit of this model. Are the assumptions for Poisson model met?__
+
+```{r}
+
+# evaluate model assumptions
+
+
+```
+
+Interpretation: 
+
+
+## 4. Consequences of unmet assumptions
+
+__What are some of the consequences of overdispersion in a Poisson model? That is, if there is overdispersion in the model that isn't accounted for, what can go wrong? What are some ways we can account for overdispersion to make our conclusions more valid?__
+
+
+Response: 
+
+## 5. Negative Binomial Model
+
+__Fit a negative binomial regression model using the same variables as the Poisson model above. Show the model output. Are there any differences between the trends found in this model and the trends found in the Poisson model in part 2? Why do you think that is?__
+
+```{r}
+
+# fit negative binomial model
+# from the MASS package: glm.nb(y ~ x1 + x2 + ...., data = data_name)
+
+
+# show model output
+
+
+```
+
+Response: 
+
+## 6. LRT
+
+__Run a likelihood ratio test to compare the Poisson and negative binomial models. What does this test tell us?__
+
+```{r}
+
+# likelihood ratio test
+
+
+```
+
+Response: 
+
+## 7. Model fit metrics
+
+__Compare the Poisson and negative binomial models using other metrics of model fit (e.g. log-likelihood, deviance, AIC, BIC, pseudo R^2). You don't have to do all of these, but check a few. Pick the model you think is best.__
+
+## 8. Difference in log expected count
+
+__Using the model you picked, how much higher would the log of the expected number of visits be for someone with 1 chronic health condition compared to someone with none?__
+
+
+```{r}
+
+# you can do this by hand using the coefficients printed out by summary
+# you can also grab the coefficients from the model using model_name$coefficients and manipulating this vector the get the values you want
+
+
+```
+
+
+## 9. Expected count
+
+__Exponentiate the number you got in part 8 and interpret this value in terms of the expected number of of visits comparing the person with 1 chronic condition to the person with no chronic conditions.__
+
+```{r}
+
+
+
+
+```
+
+Interpretation: 
+
+## 10. Modling effect modification
+
+__Using the model you picked above, add an interaction term between private insurance and chronic conditions. Using the model outcome, calculate the same comparisons as in parts 8 and 9 for people with insurance and for people without insurance. Interpret the coefficients for chronic conditions, private insurance, and their interaction in this model.__
+
+```{r}
+
+# model with interaction
+
+# show output
+
+```
+
+
+## 11. Testing for Effect modification
+
+__Test if the association between chronic conditions and number of visits is modified by private insurance status (using the mode fit in part 10). Interpret the results of this test.__
+
+
+```{r}
+
+# likelihood ratio test
+
+
+```
+
+Interpretation: 
+
+## 12. Checking model fit
+
+__Assess the model fit from the model you picked. Are there any problematic points that you're worried about?__
+
+```{r}
+
+# check model fit/problematic points
+
+
+```
+
+Interpretation:
+
+## 13. Unequal follow-up
+
+__Suppose that instead of asking people how many times they had visited a physicians office in the past two years, ran a cohort study to track the number of physician office visits per person, but people are followed for unequal periods of time (some people get enrolled later, some people move, etc.). How could we have handled this variability in follow-up time across patients in our regression models?__ 
+
+Response:
+
+## 14. Zero-Inflation
+
+__Are you concerned at all about zero-inflation in the model you chose? Why or why not?__
+
+```{r}
+
+# checking for zero-inflation
+
+```
+
+Response: 
+
+## 15. Summary
+
+__Summarize your findings.__
+
+Summary: 
+
+
+
+
+```{r}
+sessionInfo()
+```
+
+

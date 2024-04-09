@@ -1,0 +1,231 @@
+---
+title: 'M6 Lecture Code: Part I'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Lecture 2
+
+## R packages
+
+Load necessary packages.
+
+```{r}
+library(tidyverse)
+library(here)
+library(car)
+library(kableExtra)
+library(ISwR)
+library(readxl)
+```
+
+
+## Data Management
+
+```{r}
+# load data (from ISwR package)
+data("eba1977")
+```
+
+# Lung Cancer in 4 Cities
+
+## Plot Data
+
+```{r}
+m6graph <- function(data, x, y, fill) {
+  ggplot(data, aes(x = {{ x }}, y = {{ y }}, fill = {{ fill }})) +
+    geom_bar(
+      stat = "identity", position = "dodge"
+    )
+}
+```
+
+
+```{r}
+m6graph(eba1977, city, cases, city)
+
+eba1977 %>%
+  ggplot(aes(x = city, y = cases, fill = city)) +
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  labs(x = "City", y = "Lung Cancer Cases", fill = "City")
+
+eba1977 %>%
+  ggplot(aes(x = age, y = pop, fill = city)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_bw() +
+  labs(x = "Age Group", y = "Population Size by Age Group", fill = "City") +
+  facet_wrap(. ~ city)
+
+eba1977 %>%
+  ggplot(aes(x = age, y = cases, fill = city)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_bw() +
+  labs(x = "Age Group", y = "Lung Cancer Cases", fill = "City")
+
+eba1977 %>%
+  mutate(rate = cases / pop * 1000) %>%
+  ggplot(aes(x = age, y = rate, fill = city)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_bw() +
+  labs(x = "City", y = "Lung Cancer Cases per 1000 Population", fill = "City")
+```
+
+## Poisson Models
+
+```{r}
+# without offset (not accounting for difference in person-time)
+fit1 <- glm(cases ~ age + city, data = eba1977, family = poisson(link = "log"))
+
+# output
+summary(fit1)
+
+
+# with offset (accounting for difference in person-time)
+fit2 <- glm(cases ~ age + city + offset(log(pop)), data = eba1977, family = poisson(link = "log"))
+
+
+# output
+summary(fit2)
+
+
+# 1st entry by hand
+# data (age group and city reference)
+eba1977[1, ]
+fit2$coefficients[c("(Intercept)")] + log(eba1977$pop[1])
+
+# 2nd entry by hand
+# data (age group reference, Horsens)
+eba1977[2, ]
+sum(fit2$coefficients[c("(Intercept)", "cityHorsens")]) + log(eba1977$pop[2])
+
+# predict
+# this gives us log(E(count))
+# by plugging in b0 + b1x1 + b2x2 + ... + bkxk + log(pop)
+predict(fit2) %>% head()
+
+# want expected count?
+predict(fit2) %>%
+  exp() %>%
+  head()
+# or
+predict(fit2, type = "response") %>% head()
+```
+
+
+# Osteoporosis 
+
+## Data Management
+
+```{r}
+# read in data
+osteo <- read_csv(here("Notes", "Datasets", "osteoporosis.csv"))
+
+head(osteo)
+```
+
+## Plot data
+
+```{r}
+osteo %>%
+  ggplot(aes(x = numnosp)) +
+  geom_histogram(binwidth = 1, fill = "yellow1", color = "black") +
+  theme_bw() +
+  labs(x = "Number of Fractures")
+
+osteo %>%
+  ggplot(aes(x = numnosp)) +
+  geom_histogram(binwidth = 1, aes(fill = trt), color = "black") +
+  theme_bw() +
+  labs(x = "Number of Fractures") +
+  facet_wrap(. ~ trt, nrow = 2) +
+  theme(legend.position = "none") +
+  scale_fill_manual(values = c("#00BFC4", "#F8766D"))
+```
+
+## Poisson Models
+
+```{r}
+# fit model with just treatment group
+osteo_fit1 <- glm(numnosp ~ trt + offset(log(trialyrs)),
+  data = osteo,
+  family = poisson(link = "log")
+)
+
+summary(osteo_fit1)
+
+# fit model with risk, age, and baseline bmd added
+osteo_fit2 <- glm(numnosp ~ trt + risk + ra_age + htotbmd + offset(log(trialyrs)), data = osteo, family = poisson(link = "log"))
+
+summary(osteo_fit2)
+
+# add interaction between risk and treatment group
+osteo_fit3 <- glm(numnosp ~ trt + risk + ra_age + htotbmd + trt:htotbmd + offset(log(trialyrs)), data = osteo, family = poisson(link = "log"))
+
+summary(osteo_fit3)
+
+# coefficients for bmd and bmd:trt
+b4 <- osteo_fit3$coefficients[5]
+b5 <- osteo_fit3$coefficients[6]
+# difference in log rate for 0.5 unit increase in bmd for placebo then treatment
+b4 / 2
+(b4 + b5) / 2
+# ratio of rate 0.5 unit increase in bmd for placebo then treatment
+exp(b4 / 2)
+exp((b4 + b5) / 2)
+```
+
+
+```{r}
+newdt <- expand.grid(
+  htotbmd = seq(0.37, 0.99, by = 0.001),
+  trt = c("treatment", "placebo"),
+  ra_age = 60,
+  risk = "low",
+  trialyrs = 4
+)
+
+pred.dt <- newdt %>%
+  mutate(
+    log_count = predict(osteo_fit3, newdt),
+    count = predict(osteo_fit3, newdt, type = "response")
+  ) %>%
+  mutate(
+    ra_age = paste0("Age: ", ra_age),
+    risk = paste0(risk, " risk")
+  )
+
+pred.dt %>%
+  ggplot(aes(x = htotbmd, y = log_count, color = trt)) +
+  geom_line() +
+  theme_bw() +
+  labs(
+    y = "log(E(count))", x = "BMD", color = element_blank(),
+    title = "Assuming 4 years of follow-up, 60 years old, low fall risk"
+  )
+
+pred.dt %>%
+  ggplot(aes(x = htotbmd, y = count, color = trt)) +
+  geom_line() +
+  theme_bw() +
+  labs(
+    y = "E(count)", x = "BMD", color = element_blank(),
+    title = "Assuming 4 years of follow-up, 60 years old, low fall risk"
+  )
+```
+
+## LRT
+
+```{r}
+anova(osteo_fit2, osteo_fit3, test = "LRT")
+```
+

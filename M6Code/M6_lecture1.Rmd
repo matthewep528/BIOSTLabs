@@ -1,0 +1,131 @@
+---
+title: 'M6 Lecture Code: Part I'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Lecture 1
+
+## R packages
+
+Load necessary packages.
+
+```{r}
+
+library(tidyverse)
+library(here) 
+library(haven) # to read in file types from other statistical software packages like stata
+library(kableExtra) # for pretty tables
+library(car)
+
+```
+
+
+## Data Management
+
+```{r}
+
+injury <- read_dta(here("Notes","Datasets","injury.dta")) %>% rename(month = x, injuries = y)
+
+
+```
+
+## Plot data
+
+```{r}
+
+injury %>%
+  ggplot(aes(x = month, y = injuries)) + 
+  geom_point() + 
+  theme_classic() + 
+  labs(x = "Month", y = "Number of Injuries", title = "Injuries at an Industrial Plant per Month") + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+kable(injury) %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F)
+
+```
+
+## Poisson Model
+
+```{r}
+# fit poisson model
+# syntax is glm(y ~ x1 + x2 + ...., data = you_data_name, family = poisson(link = "log"))
+fit <- glm(injuries ~ month, data = injury, family = poisson(link = "log"))
+# alternatively we could just do family = "poisson" and not specify the link function since log is the default
+
+# print output
+summary(fit)
+
+injury %>%
+  ggplot(aes(x = month, y = injuries)) + 
+  geom_point() + 
+  theme_classic() + 
+  labs(x = "Month", y = "Number of Injuries", title = "Injuries at an Industrial Plant per Month") + 
+  theme(plot.title = element_text(hjust = 0.5)) + 
+  geom_smooth(method = "glm", method.args = list(family = "poisson"), se = F)
+
+```
+
+# Asthma Example
+
+```{r}
+
+asthma <- read_csv(here("Notes","Datasets","asthma.csv"))
+
+asthma %>%
+  ggplot(aes(x = attack)) + 
+  geom_histogram(binwidth = 1, fill = "skyblue", color = "black") + 
+  theme_bw() +
+  labs(x = "Asthma Attacks (per year)") +
+  scale_x_continuous(breaks = seq(0, 10, by = 2))
+
+asthma %>%
+  ggplot(aes(y = attack, x = ghq12)) + 
+  geom_point() + 
+  theme_bw() + 
+  facet_grid(res_inf ~ sex)
+  
+
+
+```
+
+## Poisson Models
+
+```{r}
+
+# model with just respiratory infections
+fit1 <- glm(attack ~ ghq12, data = asthma, family = poisson(link = "log"))
+
+# print output
+summary(fit1)
+
+# model with just respiratory infections, sex, and ghq12
+fit2 <- glm(attack ~ res_inf + sex + ghq12, data = asthma, family = poisson(link = "log"))
+
+# print output
+summary(fit2)
+
+# likelihood ratio test
+anova(fit1,fit2, test = "LRT")
+# showing by hand, LRT is drop-in-deviance test
+x2 = (deviance(fit1)-deviance(fit2))
+pchisq(x2, df = 2, lower.tail = F)
+
+
+
+
+
+```
+
+
+

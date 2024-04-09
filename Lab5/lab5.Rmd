@@ -1,5 +1,5 @@
 ---
-title: "M4 Lab"
+title: "M5 Lab"
 author: "Matthew Præstgaard"
 date: "Spring 2024"
 output:
@@ -189,7 +189,7 @@ set.seed(1234)
 
 
 # using AUC as the measure of fit
-# reminder: to change the metric used, set type.measure to the metric you want (auc, deviance, etc.) 
+# reminder: to change the metric used, set type.measure to the metric you want (auc, deviance, etc.)
 # lasso
 
 # show output 
