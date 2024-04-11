@@ -50,13 +50,13 @@ The surveys contain interview from 2,500 people in the United States. They inclu
 
 
 
-```{r}
+```{r, message = FALSE}
 # read in data
 data <- read_csv(here("Lab6", "hw6.csv")) %>%
-  drop_na() %>%
-  mutate(
-    healthStat = factor(health - 1)
-  )
+    drop_na() %>%
+    mutate(
+        healthStat = factor(health - 1)
+    )
 # turn health status into a factor variable so it doesn't get treated as a numeric 1, 2, 3
 ```
 
@@ -76,6 +76,9 @@ ggplotly(histVisit)
 sumVisit <- summarize.var(data, visit)
 kable(sumVisit)
 ```
+
+Side note: it would be great if ggplot/tidyverse/Posit would stop always changing their notation guidelines/standards and preferred arguments every 3 months so that
+I don't have to see a warning about something benign all the time
 
 Description: The data are heavily right-skewed, as seen in the histogram and have a standard deviation higher than the mean itself.
 Since we are dealing with counts as our outcome variable, linear regression is not appropriate. A Poisson or negative binomial model would be appropriate instead.

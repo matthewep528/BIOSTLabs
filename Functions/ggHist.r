@@ -1,12 +1,14 @@
 # ggplot histogram function with optional faceting variable
 # Usage: gg.hist(data, x, bins (optional), title (optional), data$group (optional))
-gghist <- function(data, x, bins = 20, title = "Insert Title", x_lab = "x", group = NULL) {
+ggHist <- function(data, x, bins = 20, title = "Insert Title", x_lab = "x", group = NULL) {
   require(ggplot2)
   require(ggh4x)
 
   gg <- ggplot(data, aes(x = {{ x }})) +
-    geom_histogram(aes(
-        y = after_stat(density)),
+    geom_histogram(
+      aes(
+        y = after_stat(density)
+      ),
       bins = bins,
       alpha = 0.8,
       color = "#353535"
