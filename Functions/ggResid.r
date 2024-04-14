@@ -1,8 +1,8 @@
 # Example usage:
 # fit <- lm(mpg ~ disp + hp, data = mtcars)
-# ggResid(fit)
+# ggResid(fit, title = "title" (optional) )
 
-ggResid <- function(fit) {
+ggResid <- function(fit, title = NULL) {
   # Extract fitted values and residuals from the linear model
   fitted_values <- fit$fitted.values
   residuals <- fit$residuals
@@ -13,9 +13,9 @@ ggResid <- function(fit) {
   # Create the plot
   ggplot(resid_data, aes(x = Fitted, y = Residuals)) +
     geom_point() +
-    geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "#ecd467", size = 1) +
     labs(
-      title = "Residuals vs. Fitted Values",
+      title = title,
       x = "Fitted Values",
       y = "Residuals"
     )

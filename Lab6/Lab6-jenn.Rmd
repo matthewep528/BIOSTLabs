@@ -21,8 +21,6 @@ knitr::opts_chunk$set(error = TRUE)
 
 # Lab Setup
 
-### Note: some results may not show up properly in the defauly (dark) theme
-
 ## R packages
 
 Load necessary packages. 
@@ -44,7 +42,6 @@ library(ggh4x)
 
 source(here("Functions", "ggHist2.r"))
 source(here("Functions", "summariseVar.r"))
-source(here("Functions", "ggResid.r"))
 ```
 
 ## Data management
@@ -57,10 +54,10 @@ The surveys contain interview from 2,500 people in the United States. They inclu
 ```{r, message = FALSE}
 # read in data
 data <- read_csv(here("Lab6", "hw6.csv")) %>%
-  drop_na() %>%
-  mutate(
-    healthStat = factor(health - 1)
-  )
+    drop_na() %>%
+    mutate(
+        healthStat = factor(health - 1)
+    )
 # turn health status into a factor variable so it doesn't get treated as a numeric 1, 2, 3
 ```
 
@@ -73,6 +70,7 @@ __Based on these two analyses, is linear regression appropriate? What type of re
 ```{r, message = FALSE}
 # histogram of outcome
 histVisit <- ggHist2(data, visit, bins = 35, title = "Histogram of Number of Visits")
+histVisit
 ggplotly(histVisit)
 
 # summary statistics
@@ -192,19 +190,49 @@ r2Pois <- 1 - (visitPois$deviance / visitPois$null.deviance)
 
 AIC2 <- AIC(visitNB)
 BIC2 <- BIC(visitNB)
-Deviance2 <- deviance(visitNB)
 r2NB <- 1 - (logLik(visitNB) / logLik(update(visitNB, . ~ 1)))
 
-diagPois <- tibble(AIC1, BIC1, Deviance, r2Pois)
-kable(diagPois, caption = "Diagnostic Values of Poisson Model")
+diagPois <- tibble(AIC1, BIC1, Deviance, r2Pois) %>%
+    rename(
+        AIC = AIC1,
+        BIC = BIC1,
+        Pseudo_R2 = r2Pois
+    )
+kable(diagPois, title = "Diagnostic Values of Poisson Model")
 
-diagNB <- tibble(AIC2, BIC2, Deviance2, r2NB)
-kable(diagNB, caption = "Diagnostic Values of Negative-Binomial Model")
+diagNB <- tibble(AIC2, BIC2, r2NB) %>%
+    rename(
+        AIC = AIC2,
+        BIC = BIC2,
+        Pseudo_R2 = r2NB
+    )
+kable(diagPois, title = "Diagnostic Values of Negative-Binomial Model")
 
-ggResid(visitPois, title = "Residuals vs Fitted Values (Poisson)") %>%
-  ggplotly()
-ggResid(visitNB, title = "Residuals vs Fitter Values (Negative-Binomial)") %>%
-  ggplotly()
+fittedPois <- fitted(visitPois)
+residPois <- visitPois$residuals
+
+fittedNB <- fitted(visitNB)
+residNB <- visitNB$residuals
+
+ggplot(data, aes(x = fittedPois, y = residPois)) +
+    geom_point(alpha = 0.5) +
+    labs(
+        title = "Standardized Residuals vs Fitted Values (Poisson)",
+        x = "Fitted Values",
+        y = "Standardized Residuals"
+    ) +
+    geom_hline(yintercept = 0, linetype = "dashed", size = 1) +
+    theme_bw()
+
+ggplot(data, aes(x = fittedNB, y = residNB)) +
+    geom_point(alpha = 0.5) +
+    labs(
+        title = "Standardized Residuals vs Fitted Values (Negative-Binomial)",
+        x = "Fitted Values",
+        y = "Standardized Residuals"
+    ) +
+    geom_hline(yintercept = 0, linetype = "dashed", size = 1) +
+    theme_bw()
 ```
 
 ## 8. Difference in log expected count
@@ -214,22 +242,20 @@ __Using the model you picked, how much higher would the log of the expected numb
 
 ```{r}
 # you can do this by hand using the coefficients printed out by summary
+
 # you can also grab the coefficients from the model using model_name$coefficients and manipulating this vector the get the values you want
 ```
 
-As the coefficient for health conditions in the NB model is 0.159, someone with one chronic health condition would
-have a log expected number of visits 0.159 higher than someone with none, holding all else equal.
 
 ## 9. Expected count
 
 __Exponentiate the number you got in part 8 and interpret this value in terms of the expected number of of visits comparing the person with 1 chronic condition to the person with no chronic conditions.__
 
 ```{r}
-exp(0.158599)
+
 ```
 
-Interpretation: Someone with one health condition would have 1.17 more expected visits compared to someone with none,
-holding all else equal.
+Interpretation: 
 
 ## 10. Modling effect modification
 
@@ -239,25 +265,10 @@ __Interpret the coefficients for chronic conditions, private insurance, and thei
 
 ```{r}
 # model with interaction
-NBInter <- glm.nb(visit ~ healthStat + sex + race + adldiff + privins * cond + age + edu, data = data)
+
 # show output
-summ(NBInter)
-
-sink("NBInter.txt")
-summary(NBInter)
-sink()
-
-exp(coef(NBInter))
 ```
 
-**Chronic Conditions**:  For individuals without private insurance, each additional chronic condition is 
-associated with a ~16.3% increase in the expected count of physician visits (0.159 log visits), holding all other variables constant.  
-**Private Insurance**: -0.205 For individuals without chronic conditions, having private insurance is associated with
-a ~18.5% decrease in expected visits (-0.205 log visits), holding all else constant.  
-**Interaction Term**: 0.034 For those with private insurance, every additional chronic condition increases the number
-of expected office visits by ~20.1% (0.151 + 0.034 log visits), compared to the 16.3% increase for those without,
-holding all else constant.  
-The p-value for the interaction term (0.282) suggests that this effect is not significant.
 
 ## 11. Testing for Effect modification
 

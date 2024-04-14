@@ -34,19 +34,11 @@ library(lmtest)
 library(car)
 library(ggpubr)
 library(kableExtra)
-library(ggthemr)
-ggthemr("flat dark")
-library(plotly)
-library(jtools)
-
-source(here("Functions", "ggHist2.r"))
-source(here("Functions", "summariseVar.r"))
 ```
 
 ## Data management
 
-The data were obtained from a survey that was aimed to investigate the factors associated with the number of physician office visits over the past two years.
-The surveys contain interview from 2,500 people in the United States. They include demographics, health condition, and insurance information of each interviewee.
+The data were obtained from a survey that was aimed to investigate the factors associated with the number of physician office visits over the past two years. The surveys contain interview from 2,500 people in the United States. They include demographics, health condition, and insurance information of each interviewee.
 
 
 
@@ -63,44 +55,29 @@ data <- read_csv(here("Lab6", "hw6.csv")) %>%
 
 ## 1. Visualize Data
 
-__Generate a histogram of the outcome variable and comment on the shape. Summarize the outcome variable using summary statistics.__
-__Based on these two analyses, is linear regression appropriate? What type of regression do you think is necessary to answer the remaining questions? Why?__
+__Generate a histogram of3 the outcome variable and comment on the shape. Summarize the outcome variable using summary statistics. Based on these two analyses, is linear regression appropriate? What type of regression do you think is necessary to answer the remaining questions? Why?__
 
-```{r, message = FALSE}
+```{r}
 # histogram of outcome
-histVisit <- ggHist2(data, visit, bins = 35, title = "Histogram of Number of Visits")
-histVisit
-ggplotly(histVisit)
+
 
 # summary statistics
-sumVisit <- summarize.var(data, visit)
-kable(sumVisit)
 ```
 
-Description: The data are heavily right-skewed, as seen in the histogram and have a standard deviation higher than the mean itself.
-Since we are dealing with counts as our outcome variable, linear regression is not appropriate. A Poisson or negative binomial model would be appropriate instead.
-The high variance (52.62) suggests that negative binomial regression is the more appropriate of the two.
+Description: 
 
 ## 2. Poisson model
 
-__Fit a Poisson model that estimates the expected number of physician office visits adjusting for health status, sex, race, condition of limiting activities of living,__
-__race, private insurance information, age, chronic conditions, and education. Show the output and interpret the coefficient for the chronic conditions variable.__
-__Which variables appear to be associated with the outcome?__
+__Fit a Poisson model that estimates the expected number of physician office visits adjusting for health status, sex, race, condition of limiting activities of living, race, private insurance information, age, chronic conditions, and education. Show the output and interpret the coefficient for the chronic conditions variable. Which variables appear to be associated with the outcome?__  
 
 ```{r}
 # Poisson model
 # glm(y ~ x1 + x2 + ..., data = data_name, family = poisson(link = "log"))
-poisson <- glm(visit ~ healthStat + sex + race + adldiff + privins + age + cond + edu, data = data, family = poisson(link = "log"))
 
 # show model output
-summ(poisson)
-summary(poisson)
-
-exp(coef(poisson))
 ```
 
-Interpretation: All of the variables appear to be associated with the outcome.
-For each additional chronic condition an individual has, the expected log count of visits increases by 0.14 (visits increase by 1.15).
+Interpretation: 
 
 
 ## 3. Model Assumptions
@@ -172,9 +149,7 @@ Interpretation:
 
 ## 10. Modling effect modification
 
-__Using the model you picked above, add an interaction term between private insurance and chronic conditions.__
-__Using the model outcome, calculate the same comparisons as in parts 8 and 9 for people with insurance and for people without insurance.__
-__Interpret the coefficients for chronic conditions, private insurance, and their interaction in this model.__
+__Using the model you picked above, add an interaction term between private insurance and chronic conditions. Using the model outcome, calculate the same comparisons as in parts 8 and 9 for people with insurance and for people without insurance. Interpret the coefficients for chronic conditions, private insurance, and their interaction in this model.__
 
 ```{r}
 # model with interaction

@@ -1,0 +1,35 @@
+
+Call:
+glm.nb(formula = visit ~ healthStat + sex + race + adldiff + 
+    privins * cond + age + edu, data = data, init.theta = 1.598398003, 
+    link = log)
+
+Coefficients:
+              Estimate Std. Error z value Pr(>|z|)    
+(Intercept)   2.150202   0.240244   8.950  < 2e-16 ***
+healthStat1  -0.345855   0.056373  -6.135 8.51e-10 ***
+healthStat2  -0.611947   0.091561  -6.684 2.33e-11 ***
+sex          -0.036873   0.036747  -1.003  0.31565    
+race         -0.080268   0.064103  -1.252  0.21051    
+adldiff       0.131583   0.049142   2.678  0.00741 ** 
+privins      -0.204568   0.075794  -2.699  0.00695 ** 
+cond          0.150834   0.015628   9.652  < 2e-16 ***
+age          -0.063086   0.030031  -2.101  0.03567 *  
+edu           0.023190   0.005387   4.305 1.67e-05 ***
+privins:cond  0.033858   0.031480   1.076  0.28213    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+(Dispersion parameter for Negative Binomial(1.5984) family taken to be 1)
+
+    Null deviance: 3030.5  on 2499  degrees of freedom
+Residual deviance: 2704.4  on 2489  degrees of freedom
+AIC: 14389
+
+Number of Fisher Scoring iterations: 1
+
+
+              Theta:  1.5984 
+          Std. Err.:  0.0566 
+
+ 2 x log-likelihood:  -14365.0480 
