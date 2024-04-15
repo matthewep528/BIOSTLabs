@@ -1,0 +1,231 @@
+---
+title: 'Module 6 Lecture Code: Part IV'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Lecture 3
+
+## R packages
+
+Load necessary packages.
+
+```{r}
+
+library(tidyverse)
+library(here) 
+library(car)
+library(kableExtra)
+library(ISwR)
+library(readxl)
+library(pscl)
+library(vcdExtra)
+library(NHANES)
+```
+
+
+## Data Management
+
+```{r}
+
+osteo <- read_csv(here("Notes","Datasets","osteoporosis.csv"))
+
+needle_sharing <- read_excel(here("Notes","Datasets","needle_sharing.xls")) %>%
+  drop_na(shared_syr)
+
+nhanes = NHANES %>%
+  dplyr::select(Age, DaysMentHlthBad, HealthGen, Gender, HHIncome) %>%
+  drop_na() 
+
+```
+
+# NHANES
+
+## Plot Data
+
+```{r}
+nhanes %>%
+  ggplot(aes(x = DaysMentHlthBad)) + 
+  geom_histogram(fill = "lightskyblue", color = "black", binwidth = 1) + 
+  theme_bw() + 
+  labs(x = "Number of Bad Mental Health Days in the Past Month")
+
+```
+
+
+
+## Poisson and NB regression models
+
+```{r}
+
+# poisson model
+fit_pois <- glm(DaysMentHlthBad ~ Age + HealthGen + Gender + HHIncome, 
+                data = nhanes, family = poisson(link = "log"))
+
+# NB model
+fit_nb <- MASS::glm.nb(DaysMentHlthBad ~ Age + HealthGen + Gender + HHIncome,
+                       data = nhanes)
+
+pscl::odTest(fit_nb)
+
+deviance(fit_pois)/fit_pois$df.residual
+sum(residuals(fit_pois, type = "pearson")^2)/fit_pois$df.residual
+
+summary(fit_nb)
+```
+
+```{r}
+
+# calculate number of zeros
+sum(nhanes$DaysMentHlthBad==0)
+# proportion of zeros
+mean(nhanes$DaysMentHlthBad==0)
+
+# predicted mean from poisson
+pois_lambda = predict(fit_pois, type = "response")
+# estimated number of 0s from poisson model
+sum(dpois(0, lambda = pois_lambda))
+
+
+# predicted mean from NB
+nb_mu = predict(fit_nb, type = "response")
+# theta parameter
+nb_size = fit_nb$theta
+# estimated number of 0s from NB model
+sum(dnbinom(0, mu = nb_mu, size = nb_size))
+
+
+performance::check_zeroinflation(fit_pois)
+performance::check_zeroinflation(fit_nb)
+
+
+```
+
+```{r}
+
+# fit zero inflated models
+# just use intercept to estimate probability of zero/nonzero
+# negative binomial
+fit_zinb <- zeroinfl(DaysMentHlthBad ~ Age + HealthGen + Gender + HHIncome | 1, data = nhanes, dist = "negbin")
+# output
+summary(fit_zinb)
+
+# poisson
+fit_zip <- zeroinfl(DaysMentHlthBad ~ Age + HealthGen + Gender + HHIncome | 1, data = nhanes, dist = "poisson")
+# output
+summary(fit_zip)
+
+# fit hurdle models
+
+# poisson
+fit_hurdle_pois <- hurdle(DaysMentHlthBad ~ Age + HealthGen + Gender + HHIncome | 1, data = nhanes, dist = "poisson", zero.dist = "binomial", link = "logit")
+# output
+summary(fit_hurdle_pois)
+
+# negative binomial
+fit_hurdle_nb <- hurdle(DaysMentHlthBad ~ Age + HealthGen + Gender + HHIncome | 1, data = nhanes, dist = "negbin", zero.dist = "binomial", link = "logit")
+# output
+summary(fit_hurdle_nb)
+
+
+# check AICs
+# negative binomial and Poisson
+AIC(fit_nb) ; AIC(fit_pois)
+
+# zero-inflated NB and Poisson
+AIC(fit_zinb) ; AIC(fit_zip)
+
+# hurdle NB and Poisson
+AIC(fit_hurdle_nb) ; AIC(fit_hurdle_pois)
+
+
+# include covariate in zero/non-zero model
+fit_zinb2 <- zeroinfl(DaysMentHlthBad ~ Age + HealthGen + Gender + HHIncome | Gender + Age, data = nhanes, dist = "negbin")
+
+# compare AICs
+AIC(fit_zinb) ; AIC(fit_zinb2) 
+
+#LRT
+lmtest::lrtest(fit_zinb, fit_zinb2)
+
+# output
+summary(fit_zinb2)
+
+```
+
+
+# Osteoporosis
+
+## Plot Data
+
+```{r}
+
+osteo %>% 
+  ggplot(aes(x = numnosp)) + 
+  geom_histogram(fill = "lightskyblue", color = "black", binwidth = 1) + 
+  theme_bw() + 
+  labs(x = "Number of Fractures")
+
+```
+
+## Poisson and NB regression models
+
+```{r}
+# poisson fit
+osteo_pois <- glm(numnosp ~ ra_age + htotbmd + risk + trt + offset(log(trialyrs)), 
+                  data = osteo, family = poisson(link = "log"))
+
+# negative binomial fit 
+osteo_nb <- MASS::glm.nb(numnosp ~ ra_age + htotbmd + risk + trt + offset(log(trialyrs)), 
+                         data = osteo)
+
+pscl::odTest(osteo_nb)
+
+summary(osteo_nb)
+
+```
+
+
+```{r}
+# calculate number of zeros
+sum(osteo$numnosp==0)
+
+# proportion of zeros
+mean(osteo$numnosp==0)
+
+# expected number of zeros
+
+# poisson model
+# expected count from poisson
+pois_lambda = predict(osteo_pois, type = "response")
+# expected number of zeros from poisson
+sum(dpois(0, lambda = pois_lambda))
+
+# NB model
+# mean from NB model
+nb_mu = predict(osteo_nb, type = "response")
+# theta from NB model
+nb_size = osteo_nb$theta
+# expected number of zeros from NB
+sum(dnbinom(0, mu = nb_mu, size = nb_size))
+
+performance::check_zeroinflation(osteo_pois)
+performance::check_zeroinflation(osteo_nb)
+
+```
+
+
+
+
+
+
+

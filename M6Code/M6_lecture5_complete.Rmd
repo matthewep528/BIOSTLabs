@@ -1,0 +1,180 @@
+---
+title: 'M6 Lecture Code: Part V (Complete)'
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+
+
+```{r}
+library(tidyverse)
+library(here)
+library(pscl)
+library(lmtest)
+library(car)
+
+```
+
+## Data Management
+
+
+```{r}
+
+nhanes <- read_csv(here("Notes","Datasets","nhanes_rx.csv")) %>%
+  mutate(rxcount = ifelse(rx=="No",0, rxcount), # change missing counts to 0 based on binary variable for Rx
+         min_pa = ifelse(pa=="No",0, min_pa), # same for physical activity
+         sex = factor(sex, levels = 1:2, labels = c("Male","Female")), # make factor
+         insured = factor(insured, levels = 1:2, labels =c("Insured", "Uninsured"))) # make factor
+
+```
+
+# Analysis
+
+## EDA
+
+```{r}
+
+# skim data
+skimr::skim(nhanes)
+
+
+# plot outcome
+nhanes %>%
+  ggplot(aes(x = rxcount)) + 
+  geom_histogram(binwidth = 1, color = "black", fill = "springgreen2") + 
+  theme_bw() +
+  labs(x = "Number of Prescription Drugs Taken in a Month")
+
+```
+
+## Poisson Model
+
+```{r}
+# fit Poisson model 
+fitpois <- glm(rxcount ~  age + sex + insured + min_pa + income_poverty_ratio , data = nhanes, family = poisson(link = "log"))
+# View output
+summary(fitpois)
+
+
+
+```
+
+## Assumptions
+
+```{r}
+# check assumptions
+
+# check linearity
+crPlots(fitpois)
+
+
+fitpois2 <- glm(rxcount ~  agec + I(agec^2) + sex + insured + sqrt(min_pa)+ income_poverty_ratio, 
+                family = poisson(link = "log"), data = nhanes %>% mutate(agec = age-50))
+
+crPlots(fitpois2)
+
+# check VIF
+vif(fitpois2)
+
+# problematic points
+influenceIndexPlot(fitpois2, c("cook","studentized","hat"))
+
+```
+
+## Overdispersion
+
+```{r}
+
+# overdispersion checks
+
+dev <- deviance(fitpois2)
+X2 <- sum(residuals(fitpois2, type = "pearson")^2)
+df <- fitpois2$df.residual
+
+dev/df
+X2/df
+
+```
+
+## Handling Overdisperison
+
+## Quasipoisson
+
+```{r}
+
+# fit quasipoisson model
+
+fitquasi <- glm(rxcount ~  agec + I(agec^2) + sex + insured + sqrt(min_pa)+ income_poverty_ratio, 
+                family = quasipoisson(link = "log"), 
+                data = nhanes %>% mutate(agec = age-50))
+
+
+summary(fitquasi)
+
+```
+
+## Negative Binomial
+
+```{r}
+# fit negative binomial model
+
+fitnb <- MASS::glm.nb(rxcount ~  agec + I(agec^2) + sex + insured + sqrt(min_pa)+ income_poverty_ratio, 
+                      data = nhanes %>% mutate(agec = age-50))
+
+# LRT comparing NB and Poisson
+odTest(fitnb)
+
+# model output
+summary(fitnb)
+
+
+```
+
+## Zero-Inflation
+
+```{r}
+# run check for zero inflation
+performance::check_zeroinflation(fitpois2)
+performance::check_zeroinflation(fitnb)
+
+# run zero-inflated models
+zinb <- zeroinfl(rxcount ~  agec + I(agec^2) + sex + insured + sqrt(min_pa)+ income_poverty_ratio | insured + income_poverty_ratio, 
+                data = nhanes %>% mutate(agec = age-50), dist = "negbin")
+zip <- zeroinfl(rxcount ~  agec + I(agec^2) + sex + insured + sqrt(min_pa)+ income_poverty_ratio | insured + income_poverty_ratio, 
+                data = nhanes %>% mutate(agec = age-50), dist = "poisson")
+
+# run hurdle models
+hnb <- hurdle(rxcount ~  agec + I(agec^2) + sex + insured + sqrt(min_pa)+ income_poverty_ratio | insured + income_poverty_ratio, 
+                data = nhanes %>% mutate(agec = age-50), dist = "negbin")
+hp <- zeroinfl(rxcount ~  agec + I(agec^2) + sex + insured + sqrt(min_pa)+ income_poverty_ratio | insured + income_poverty_ratio, 
+                data = nhanes %>% mutate(agec = age-50), dist = "poisson")
+
+# compare models
+AIC(fitpois2) ; AIC(fitnb)
+AIC(zip) ; AIC(zinb)
+AIC(hp) ; AIC(hnb)
+
+# output
+summary(zinb)
+
+predict(zinb, type = "response")[1]
+
+xi = model.matrix(zinb)[1,]
+xi_zero = xi[names(zinb$coefficients$zero)]
+p0 = plogis(sum(zinb$coefficients$zero*xi_zero))
+
+mu = exp(sum(zinb$coefficients$count*xi))
+
+p0*0 + (1-p0)*mu
+
+```
+

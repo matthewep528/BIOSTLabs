@@ -1,15 +1,13 @@
 ---
 title: "M6 Lab"
-author: "Matthew Præstgaard"
+author: "YOUR NAME HERE"
 date: "Spring 2024"
 output:
-  rmdformats::downcute:
-    self_contained: true
-    default_style: "dark"
-    downcute_theme: "default"
-    code_folding: "show"
-  svglite:
-    fig.retina: 2
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
 ---
 
 ```{r setup, include=FALSE}
@@ -20,6 +18,8 @@ knitr::opts_chunk$set(error = TRUE)
 
 
 # Lab Setup
+
+### Note: some results may not show up properly in the defauly (dark) theme
 
 ## R packages
 
@@ -32,16 +32,6 @@ library(MASS)
 library(pscl)
 library(lmtest)
 library(car)
-library(ggpubr)
-library(kableExtra)
-library(ggthemr)
-ggthemr("flat dark")
-library(plotly)
-library(jtools)
-library(ggh4x)
-
-source(here("Functions", "ggHist2.r"))
-source(here("Functions", "summariseVar.r"))
 ```
 
 ## Data management
@@ -69,13 +59,22 @@ __Based on these two analyses, is linear regression appropriate? What type of re
 
 ```{r, message = FALSE}
 # histogram of outcome
-histVisit <- ggHist2(data, visit, bins = 35, title = "Histogram of Number of Visits")
-histVisit
-ggplotly(histVisit)
+ggplot(data, aes(x = visit)) +
+    geom_histogram()
 
 # summary statistics
-sumVisit <- summarize.var(data, visit)
-kable(sumVisit)
+data %>%
+    summarise(
+        mean = mean(visit, na.rm = TRUE),
+        median = median(visit, na.rm = TRUE),
+        min = min(visit, na.rm = TRUE),
+        max = max(visit, na.rm = TRUE),
+        q25 = quantile(visit, 0.25, na.rm = TRUE), # first quartile
+        q75 = quantile(visit, 0.75, na.rm = TRUE), # third quartile
+        sd = sd(visit, na.rm = TRUE),
+        variance = var(visit, na.rm = TRUE),
+        n = length(na.omit(visit))
+    )
 ```
 
 Side note: it would be great if ggplot/tidyverse/Posit would stop always changing their notation guidelines/standards and preferred arguments every 3 months so that
@@ -97,7 +96,6 @@ __Which variables appear to be associated with the outcome?__
 visitPois <- glm(visit ~ healthStat + sex + race + adldiff + privins + age + cond + edu, data = data, family = poisson(link = "log"))
 
 # show model output
-summ(visitPois)
 summary(visitPois)
 
 kable(exp(coef(visitPois)))
@@ -145,7 +143,8 @@ This can be remedied by either adjusting the standard errors or by using a diffe
 
 ```{r}
 quasiPois <- glm(visit ~ healthStat + sex + race + adldiff + privins + age + cond + edu, data = data, family = quasipoisson(link = "log"))
-summ(quasiPois)
+
+summary(quasiPois)
 ```
 
 As is seen, using a quasipoisson model leads to larger standard errors than the unadjusted model.
@@ -186,53 +185,16 @@ __Compare the Poisson and negative binomial models using other metrics of model 
 ```{r}
 AIC1 <- AIC(visitPois)
 BIC1 <- BIC(visitPois)
-r2Pois <- 1 - (visitPois$deviance / visitPois$null.deviance)
 
 AIC2 <- AIC(visitNB)
 BIC2 <- BIC(visitNB)
-r2NB <- 1 - (logLik(visitNB) / logLik(update(visitNB, . ~ 1)))
+Deviance2 <- deviance(visitNB)
 
-diagPois <- tibble(AIC1, BIC1, Deviance, r2Pois) %>%
-    rename(
-        AIC = AIC1,
-        BIC = BIC1,
-        Pseudo_R2 = r2Pois
-    )
-kable(diagPois, title = "Diagnostic Values of Poisson Model")
+diagPois <- tibble(AIC1, BIC1, Deviance)
+kable(diagPois, caption = "Diagnostic Values of Poisson Model")
 
-diagNB <- tibble(AIC2, BIC2, r2NB) %>%
-    rename(
-        AIC = AIC2,
-        BIC = BIC2,
-        Pseudo_R2 = r2NB
-    )
-kable(diagPois, title = "Diagnostic Values of Negative-Binomial Model")
-
-fittedPois <- fitted(visitPois)
-residPois <- visitPois$residuals
-
-fittedNB <- fitted(visitNB)
-residNB <- visitNB$residuals
-
-ggplot(data, aes(x = fittedPois, y = residPois)) +
-    geom_point(alpha = 0.5) +
-    labs(
-        title = "Standardized Residuals vs Fitted Values (Poisson)",
-        x = "Fitted Values",
-        y = "Standardized Residuals"
-    ) +
-    geom_hline(yintercept = 0, linetype = "dashed", size = 1) +
-    theme_bw()
-
-ggplot(data, aes(x = fittedNB, y = residNB)) +
-    geom_point(alpha = 0.5) +
-    labs(
-        title = "Standardized Residuals vs Fitted Values (Negative-Binomial)",
-        x = "Fitted Values",
-        y = "Standardized Residuals"
-    ) +
-    geom_hline(yintercept = 0, linetype = "dashed", size = 1) +
-    theme_bw()
+diagNB <- tibble(AIC2, BIC2, Deviance2)
+kable(diagNB, caption = "Diagnostic Values of Negative-Binomial Model")
 ```
 
 ## 8. Difference in log expected count
@@ -242,20 +204,28 @@ __Using the model you picked, how much higher would the log of the expected numb
 
 ```{r}
 # you can do this by hand using the coefficients printed out by summary
-
 # you can also grab the coefficients from the model using model_name$coefficients and manipulating this vector the get the values you want
 ```
 
+$$\log(\text{Expected Count}) = \beta_0 + \beta_1 \times \text{cond}$$
+$$\log(\text{Expected Count}) = 2.1502 + 0.1586 \times \text{cond}$$
+$$\log(\text{Expected Count}_{\text{cond}=1}) - \log(\text{Expected Count}_{\text{cond}=0}) = \beta_1 \times (1 - 0)$$
+$$\log(\text{Expected Count}_{\text{cond}=1}) - \log(\text{Expected Count}_{\text{cond}=0}) = 0.1586 \times 1$$
+
+
+As the coefficient for health conditions in the NB model is 0.159, someone with one chronic health condition would
+have a log expected number of visits **0.159** higher than someone with none, holding all else equal.
 
 ## 9. Expected count
 
 __Exponentiate the number you got in part 8 and interpret this value in terms of the expected number of of visits comparing the person with 1 chronic condition to the person with no chronic conditions.__
 
 ```{r}
-
+exp(0.158599)
 ```
 
-Interpretation: 
+Interpretation: Someone with one health condition would have **1.17** more expected visits compared to someone with none,
+holding all else equal.
 
 ## 10. Modling effect modification
 
@@ -265,10 +235,22 @@ __Interpret the coefficients for chronic conditions, private insurance, and thei
 
 ```{r}
 # model with interaction
+NBInter <- glm.nb(visit ~ healthStat + sex + race + adldiff + privins * cond + age + edu, data = data)
 
 # show output
+summary(NBInter)
+
+exp(coef(NBInter))
 ```
 
+**Chronic Conditions**:  For individuals without private insurance, each additional chronic condition is 
+associated with a ~16.3% increase in the expected count of physician visits (0.159 log visits), holding all other variables constant.  
+**Private Insurance**: -0.205 For individuals without chronic conditions, having private insurance is associated with
+a ~18.5% decrease in expected visits (-0.205 log visits), holding all else constant.  
+**Interaction Term**: 0.034 For those with private insurance, every additional chronic condition increases the number
+of expected office visits by ~20.1% (0.151 + 0.034 log visits), compared to the 16.3% increase for those without,
+holding all else constant.  
+The p-value for the interaction term (0.282) suggests that this effect is not significant.
 
 ## 11. Testing for Effect modification
 
@@ -277,9 +259,11 @@ __Test if the association between chronic conditions and number of visits is mod
 
 ```{r}
 # likelihood ratio test
+anova(visitNB, NBInter)
 ```
 
-Interpretation: 
+Interpretation: With **p=0.291**, we do not have evidence at the 0.05 significance level to support that private insurance status modifies
+the relationship between the number of chronic conditions and the expected count of physician visits. 
 
 ## 12. Checking model fit
 
@@ -287,15 +271,28 @@ __Assess the model fit from the model you picked. Are there any problematic poin
 
 ```{r}
 # check model fit/problematic points
+AIC3 <- AIC(NBInter)
+BIC3 <- BIC(NBInter)
+Deviance3 <- deviance(NBInter)
+R2Int <- pR2(NBInter)
+
+diagNBInt <- tibble(AIC3, BIC3, Deviance3, NBInter)
+kable(diagNBInter, caption = "Diagnostic Values of Interaction Term Negative-Binomial Model")
+
+influenceIndexPlot(NBInter, c("Cook", "student", "hat"))
 ```
 
-Interpretation:
+Interpretation: There are some points that are of concern. In the Cook's Distance plot, a couple points are drastically higher than the rest (477 and 1284), suggesting
+these points are highly influential. There are a couple points which have much higher hat-values than the rest, suggesting that they are very high leverage and potentially
+influential.
 
 ## 13. Unequal follow-up
 
-__Suppose that instead of asking people how many times they had visited a physicians office in the past two years, ran a cohort study to track the number of physician office visits per person, but people are followed for unequal periods of time (some people get enrolled later, some people move, etc.). How could we have handled this variability in follow-up time across patients in our regression models?__ 
+__Suppose that instead of asking people how many times they had visited a physicians office in the past two years, ran a cohort study to track the__
+__number of physician office visits per person, but people are followed for unequal periods of time (some people get enrolled later, some people move, etc.).__
+__How could we have handled this variability in follow-up time across patients in our regression models?__ 
 
-Response:
+Response: This variability could be accounted for by modelings instead of counts. It could also be accounted for by using an offset of person-time in the model.
 
 ## 14. Zero-Inflation
 
@@ -303,15 +300,24 @@ __Are you concerned at all about zero-inflation in the model you chose? Why or w
 
 ```{r}
 # checking for zero-inflation
+performance::check_zeroinflation(NBInter)
+performance::check_zeroinflation(visitNB)
 ```
 
-Response: 
+Response: Based on the ratio of predicted to observed of **1.50** in the interaction model and **1.49** in the simple model, there is concern for zero-inflation.
 
 ## 15. Summary
 
 __Summarize your findings.__
 
-Summary: 
+Summary: In this lab, we intended to see if there is a correlation between the expected number of physician office visits and multiple predictors.
+A poisson model was originally fit, with all covariates being found to be statistically significantly associated with the outcome. This model did not
+meet the assumptions for a poisson model, however, so a negative binomial model was used instead. Sex and race were not statistically significantly associated in this.
+A likelyhood ratio test further suggested that a poisson model was not appropriate to use. Smaller AIC and BIC values in the negative binomial model further suggest
+being more appropriate. Influential and high-leverage points were tested for and discovered, potentially reducing how accurate our model is.
+An interaction term of private insurance and number of chronic conditions was added, but this was found to not be statistically significant.
+The interaction and non-interaction models both showed zero-inflation.
+
 
 
 

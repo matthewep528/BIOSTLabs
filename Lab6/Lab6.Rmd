@@ -41,6 +41,7 @@ ggthemr("flat dark")
 library(plotly)
 library(jtools)
 library(ggh4x)
+library(broom)
 
 source(here("Functions", "ggHist2.r"))
 source(here("Functions", "summariseVar.r"))
@@ -148,6 +149,10 @@ This can be remedied by either adjusting the standard errors or by using a diffe
 ```{r}
 quasiPois <- glm(visit ~ healthStat + sex + race + adldiff + privins + age + cond + edu, data = data, family = quasipoisson(link = "log"))
 summ(quasiPois)
+
+sink("quasiPois.txt")
+summary(quasiPois)
+sink()
 ```
 
 As is seen, using a quasipoisson model leads to larger standard errors than the unadjusted model.
@@ -163,7 +168,12 @@ __Are there any differences between the trends found in this model and the trend
 visitNB <- MASS::glm.nb(visit ~ healthStat + sex + race + adldiff + privins + age + cond + edu, data = data)
 
 # show model output
+summ(visitNB)
+
+# saving to text file for reference
+sink("visitNB.txt")
 summary(visitNB)
+sink()
 ```
 
 Response: The standard errors of the negative-binomial model are larger than those of the poisson model. The point
@@ -188,22 +198,20 @@ __Compare the Poisson and negative binomial models using other metrics of model 
 ```{r}
 AIC1 <- AIC(visitPois)
 BIC1 <- BIC(visitPois)
-r2Pois <- 1 - (visitPois$deviance / visitPois$null.deviance)
 
 AIC2 <- AIC(visitNB)
 BIC2 <- BIC(visitNB)
 Deviance2 <- deviance(visitNB)
-r2NB <- 1 - (logLik(visitNB) / logLik(update(visitNB, . ~ 1)))
 
-diagPois <- tibble(AIC1, BIC1, Deviance, r2Pois)
+diagPois <- tibble(AIC1, BIC1, Deviance)
 kable(diagPois, caption = "Diagnostic Values of Poisson Model")
 
-diagNB <- tibble(AIC2, BIC2, Deviance2, r2NB)
+diagNB <- tibble(AIC2, BIC2, Deviance2)
 kable(diagNB, caption = "Diagnostic Values of Negative-Binomial Model")
 
 ggResid(visitPois, title = "Residuals vs Fitted Values (Poisson)") %>%
   ggplotly()
-ggResid(visitNB, title = "Residuals vs Fitter Values (Negative-Binomial)") %>%
+ggResid(visitNB, title = "Residuals vs Fitted Values (Negative-Binomial)") %>%
   ggplotly()
 ```
 
@@ -217,8 +225,14 @@ __Using the model you picked, how much higher would the log of the expected numb
 # you can also grab the coefficients from the model using model_name$coefficients and manipulating this vector the get the values you want
 ```
 
+$$\log(\text{Expected Count}) = \beta_0 + \beta_1 \times \text{cond}$$
+$$\log(\text{Expected Count}) = 2.1502 + 0.1586 \times \text{cond}$$
+$$\log(\text{Expected Count}_{\text{cond}=1}) - \log(\text{Expected Count}_{\text{cond}=0}) = \beta_1 \times (1 - 0)$$
+$$\log(\text{Expected Count}_{\text{cond}=1}) - \log(\text{Expected Count}_{\text{cond}=0}) = 0.1586 \times 1$$
+
+
 As the coefficient for health conditions in the NB model is 0.159, someone with one chronic health condition would
-have a log expected number of visits 0.159 higher than someone with none, holding all else equal.
+have a log expected number of visits **0.159** higher than someone with none, holding all else equal.
 
 ## 9. Expected count
 
@@ -228,7 +242,7 @@ __Exponentiate the number you got in part 8 and interpret this value in terms of
 exp(0.158599)
 ```
 
-Interpretation: Someone with one health condition would have 1.17 more expected visits compared to someone with none,
+Interpretation: Someone with one health condition would have **1.17** more expected visits compared to someone with none,
 holding all else equal.
 
 ## 10. Modling effect modification
@@ -266,9 +280,11 @@ __Test if the association between chronic conditions and number of visits is mod
 
 ```{r}
 # likelihood ratio test
+anova(visitNB, NBInter)
 ```
 
-Interpretation: 
+Interpretation: With **p=0.291**, we do not have evidence at the 0.05 significance level to support that private insurance status modifies
+the relationship between the number of chronic conditions and the expected count of physician visits. 
 
 ## 12. Checking model fit
 
@@ -276,15 +292,28 @@ __Assess the model fit from the model you picked. Are there any problematic poin
 
 ```{r}
 # check model fit/problematic points
+AIC3 <- AIC(NBInter)
+BIC3 <- BIC(NBInter)
+Deviance3 <- deviance(NBInter)
+R2Int <- pR2(NBInter)
+
+diagNBInt <- tibble(AIC3, BIC3, Deviance3, NBInter)
+kable(diagNBInter, caption = "Diagnostic Values of Interaction Term Negative-Binomial Model")
+
+influenceIndexPlot(NBInter, c("Cook", "student", "hat"))
 ```
 
-Interpretation:
+Interpretation: There are some points that are of concern. In the Cook's Distance plot, a couple points are drastically higher than the rest (477 and 1284), suggesting
+these points are highly influential. There are a couple points which have much higher hat-values than the rest, suggesting that they are very high leverage and potentially
+influential.
 
 ## 13. Unequal follow-up
 
-__Suppose that instead of asking people how many times they had visited a physicians office in the past two years, ran a cohort study to track the number of physician office visits per person, but people are followed for unequal periods of time (some people get enrolled later, some people move, etc.). How could we have handled this variability in follow-up time across patients in our regression models?__ 
+__Suppose that instead of asking people how many times they had visited a physicians office in the past two years, ran a cohort study to track the__
+__number of physician office visits per person, but people are followed for unequal periods of time (some people get enrolled later, some people move, etc.).__
+__How could we have handled this variability in follow-up time across patients in our regression models?__ 
 
-Response:
+Response: This variability could be accounted for by modelings instead of counts. It could also be accounted for by using an offset of person-time in the model.
 
 ## 14. Zero-Inflation
 
@@ -292,15 +321,24 @@ __Are you concerned at all about zero-inflation in the model you chose? Why or w
 
 ```{r}
 # checking for zero-inflation
+performance::check_zeroinflation(NBInter)
+performance::check_zeroinflation(visitNB)
 ```
 
-Response: 
+Response: Based on the ratio of predicted to observed of **1.50** in the interaction model and **1.49** in the simple model, there is concern for zero-inflation.
 
 ## 15. Summary
 
 __Summarize your findings.__
 
-Summary: 
+Summary: In this lab, we intended to see if there is a correlation between the expected number of physician office visits and multiple predictors.
+A poisson model was originally fit, with all covariates being found to be statistically significantly associated with the outcome. This model did not
+meet the assumptions for a poisson model, however, so a negative binomial model was used instead. Sex and race were not statistically significantly associated in this.
+A likelyhood ratio test further suggested that a poisson model was not appropriate to use. Smaller AIC and BIC values in the negative binomial model further suggest
+being more appropriate. Influential and high-leverage points were tested for and discovered, potentially reducing how accurate our model is.
+An interaction term of private insurance and number of chronic conditions was added, but this was found to not be statistically significant.
+The interaction and non-interaction models both showed zero-inflation.
+
 
 
 

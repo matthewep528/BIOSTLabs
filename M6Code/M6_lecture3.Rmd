@@ -1,0 +1,248 @@
+---
+title: 'M6 Lecture Code: Part III'
+author: "Haley Grant"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_depth: '3'
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Lecture 3
+
+## R packages
+
+Load necessary packages.
+
+```{r}
+
+library(tidyverse)
+library(here) 
+library(car)
+library(kableExtra)
+library(ISwR)
+library(readxl)
+```
+
+
+## Data Management
+
+```{r}
+# Danish city data
+data("eba1977")
+# osteoporosis data
+osteo <- read_csv(here("Notes","Datasets","osteoporosis.csv"))
+
+needle_sharing <- read_excel(here("Notes","Datasets","needle_sharing.xls"))
+
+```
+
+
+
+# Danish Cities Example
+
+## Poisson model
+
+```{r}
+
+# with offset (accounting for difference population)
+city_fit <- glm(cases ~ age + city + offset(log(pop)), data = eba1977, family = poisson(link = "log"))
+
+# output
+summary(city_fit)
+
+# AIC
+AIC(city_fit)
+
+# BIC
+BIC(city_fit)
+
+# pseudo R2
+pscl::pR2(city_fit)
+
+# log likelihood
+logLik(city_fit)
+
+# deviance
+deviance(city_fit)
+
+```
+
+## Goodness of fit
+
+```{r}
+# contingency table of cases
+eba1977 %>% 
+  xtabs(cases ~ city + age, data = .) %>%
+  kable() %>%
+  kable_styling()
+  
+# contingency table of predcited cases (mean from model)
+eba1977 %>% 
+  mutate(predicted =  predict(city_fit, type = "response")) %>%
+  xtabs(predicted ~ city + age, data = .) %>%
+  kable() %>%
+  kable_styling()
+
+# deviance from model
+dev = deviance(city_fit)
+# pearson X2
+X2 = sum(resid(city_fit, type = "pearson")^2)
+
+# df = n - k - 1
+# 24 obs - (4-1 cities + 6-1 age groups) - 1 = 15
+city_fit$df.residual
+
+# GOF test with deviance
+pchisq(dev, df = city_fit$df.residual, lower.tail = F)
+# GOF test with pearson
+pchisq(X2, df = city_fit$df.residual, lower.tail = F)
+
+
+data.frame(x = seq(0,30, by = 0.05))%>%
+  ggplot(aes(x=x)) + 
+  stat_function(fun = dchisq, args = list(df=city_fit$df.residual)) + 
+  theme_bw() + 
+  geom_vline(xintercept = dev, color = "purple") + 
+  geom_vline(xintercept = X2, color = "red")
+
+eba1977 %>% 
+  mutate(predicted =  predict(city_fit, type = "response")) %>%
+  mutate(di = cases*log(cases/predicted), pi = (cases-predicted)^2/predicted) %>%
+  summarise(G2 = 2*sum(di), X2 = sum(pi))
+
+
+```
+
+# Needle sharing example
+
+## Plot data
+
+```{r}
+# hitogram
+needle_sharing %>% 
+  ggplot(aes(x = shared_syr)) + 
+  geom_histogram(fill = "lemonchiffon", color = "black") + 
+  theme_bw() + 
+  labs(x = "Number of Times Shared Syringe")
+
+```
+
+## Poisson model
+
+```{r}
+# model with homeless indicator, age, and sex
+fit1 <- glm(shared_syr ~ homeless + age + sex, data = needle_sharing, family = poisson(link = "log"))
+
+summary(fit1)
+
+exp(fit1$coefficients["homeless"])
+
+```
+
+
+
+## Residuals
+
+```{r}
+
+# pearson residuals
+pearson.resid = residuals(fit1, type = "pearson")
+
+# standardized pearson residuals
+std.resid = rstandard(fit1, type = "pearson")
+
+# calculate by hand 
+# pearson = (y-lambda)/lambda
+pearson.byhand = (fit1$y-fit1$fitted.values)/sqrt(fit1$fitted.values)
+head(pearson.byhand) ; head(pearson.resid)
+# hat values
+hii = hatvalues(fit1)
+# standardized residuals
+head(pearson.resid/sqrt(1-hii)) ; head(std.resid)
+
+cbind(count = fit1$y, fitted = fitted(fit1), pearson.resid, std.resid) %>% head(10)
+
+# look for problematic points
+car::influenceIndexPlot(fit1, c("Cook","student","hat"))
+
+# get indices of points with large cook's distance
+which(cooks.distance(fit1)>1)
+
+# look at those values to see if there's anything strange
+needle_sharing[22:27,]
+
+```
+
+```{r}
+
+needle_sharing %>%
+  drop_na(shared_syr) %>%
+  summarise(mean = mean(shared_syr),
+            var = var(shared_syr))
+
+# deviance
+dev = deviance(fit1)
+
+# pearson 
+X2 = sum(pearson.resid^2)
+
+# degrees of freedom
+df = fit1$df.residual
+
+# test statistic / df (if close to 1, Poisson is appropriate)
+# Deviance / (n - k - 1)
+dev/df
+# Pearson X2 / (n - k - 1)
+X2/df
+
+
+```
+
+## Handling overdispersion
+
+### Adjusting standard errors (Quasilikelihood approach)
+
+```{r}
+# quasilikelihood approach
+# fits poisson with an extra dispersion parameter to adjust SEs
+fit_quasi <- glm(shared_syr ~ homeless + age + sex, data = needle_sharing, family = quasipoisson(link = "log"))
+
+# show output
+summary(fit_quasi)
+
+# check coefficients (they're the same! only SEs change)
+coef(fit1) ; coef(fit_quasi)
+
+```
+
+### Negative Binomial Model
+
+```{r}
+
+# fit negative binomial model
+# this function is from the `MASS` package
+fit_nb <- MASS::glm.nb(shared_syr ~ homeless + age + sex, data = needle_sharing)
+
+# show output
+summary(fit_nb)
+# now we get slightly different coefficients
+coef(fit_nb) ; coef(fit1)
+
+# test for overdispersion
+pscl::odTest(fit_nb)
+# divide this p-value by 2
+lmtest::lrtest(fit1, fit_nb)
+
+# by hand
+llpois = logLik(fit1) %>% as.numeric()
+llnb = logLik(fit_nb) %>% as.numeric()
+pchisq(-2*(llpois - llnb), df = 1, lower.tail = F)/2
+```
+
+

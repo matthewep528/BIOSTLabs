@@ -1,0 +1,34 @@
+
+Call:
+MASS::glm.nb(formula = visit ~ healthStat + sex + race + adldiff + 
+    privins + age + cond + edu, data = data, init.theta = 1.597506752, 
+    link = log)
+
+Coefficients:
+             Estimate Std. Error z value Pr(>|z|)    
+(Intercept)  2.145003   0.240269   8.928  < 2e-16 ***
+healthStat1 -0.345198   0.056382  -6.122 9.21e-10 ***
+healthStat2 -0.611589   0.091562  -6.680 2.40e-11 ***
+sex         -0.037381   0.036748  -1.017  0.30905    
+race        -0.079038   0.064090  -1.233  0.21749    
+adldiff      0.132677   0.049097   2.702  0.00689 ** 
+privins     -0.143212   0.049923  -2.869  0.00412 ** 
+age         -0.064386   0.030022  -2.145  0.03198 *  
+cond         0.158599   0.014112  11.239  < 2e-16 ***
+edu          0.023324   0.005386   4.330 1.49e-05 ***
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+(Dispersion parameter for Negative Binomial(1.5975) family taken to be 1)
+
+    Null deviance: 3029.3  on 2499  degrees of freedom
+Residual deviance: 2704.4  on 2490  degrees of freedom
+AIC: 14388
+
+Number of Fisher Scoring iterations: 1
+
+
+              Theta:  1.5975 
+          Std. Err.:  0.0565 
+
+ 2 x log-likelihood:  -14366.1610 

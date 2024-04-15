@@ -1,0 +1,28 @@
+
+Call:
+glm(formula = visit ~ healthStat + sex + race + adldiff + privins + 
+    age + cond + edu, family = quasipoisson(link = "log"), data = data)
+
+Coefficients:
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  2.276253   0.280721   8.109 7.95e-16 ***
+healthStat1 -0.303845   0.059143  -5.137 3.00e-07 ***
+healthStat2 -0.578324   0.114933  -5.032 5.20e-07 ***
+sex         -0.036828   0.043041  -0.856 0.392274    
+race        -0.066327   0.078024  -0.850 0.395362    
+adldiff      0.129884   0.054471   2.384 0.017179 *  
+privins     -0.126695   0.059493  -2.130 0.033303 *  
+age         -0.081083   0.035221  -2.302 0.021411 *  
+cond         0.142288   0.015325   9.284  < 2e-16 ***
+edu          0.021805   0.006362   3.427 0.000619 ***
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+(Dispersion parameter for quasipoisson family taken to be 7.060462)
+
+    Null deviance: 14493  on 2499  degrees of freedom
+Residual deviance: 12888  on 2490  degrees of freedom
+AIC: NA
+
+Number of Fisher Scoring iterations: 5
+
